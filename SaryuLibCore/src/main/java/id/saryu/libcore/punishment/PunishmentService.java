@@ -216,9 +216,22 @@ public class PunishmentService {
 
         protected String fill(String template, Player target, Action action, String duration, String reason) {
             return template
-                    .replace("{PLAYER}", target.getName())
-                    .replace("{DURATION}", duration == null ? "" : duration)
-                    .replace("{REASON}", reason == null ? "" : reason);
+                    .replace("{PLAYER}", safeValue(target.getName(), 64))
+                    .replace("{DURATION}", safeValue(duration, 32))
+                    .replace("{REASON}", safeValue(reason, 256));
+        }
+
+        /**
+         * Never let a player-controlled reason inject a second command, a line
+         * break, or a control sequence into a console command. Collections are
+         * deliberately limited to printable text.
+         */
+        private String safeValue(String value, int max) {
+            if (value == null) return "";
+            String cleaned = value.replaceAll("[\\r\\n\\u0000-\\u001F\\u007F]", " ")
+                    .replaceAll("[^\\p{L}\\p{N}\\p{P}\\p{Zs}]", "?")
+                    .trim();
+            return cleaned.length() > max ? cleaned.substring(0, max) : cleaned;
         }
 
         @Override

@@ -28,10 +28,18 @@ messages:
   # --- Help ---
   help.header: "&b=== AntiChatManager Commands ==="
   help.line: "&7/{cmd} &f{sub} &8- &7{desc}"
+  help.sub.plugins: "Show plugin identity and verification results"
+  help.sub.conflicts: "Review LuckPerms command conflicts"
+  help.sub.audit: "Review permission audit findings"
+  help.sub.security: "Run security checks and show recommendations"
   help.rows:
     - "reload|Reload config and language files"
     - "info|Show plugin, database and blacklist status"
-    - "scan [report|sources]|Run an auto-scan or show the last report"
+    - "scan [report|sources|identify]|Run an auto-scan, show the last report, or identify plugins"
+    - "plugins|Show plugin identity and verification results"
+    - "conflicts [page|ignore|allow]|Review LuckPerms command conflicts"
+    - "audit [page|info|ack|ignore]|Review permission audit findings"
+    - "security|Run security checks and show recommendations"
     - "blacklist list [page] [source]|List blacklist entries"
     - "blacklist check <command>|Check whether a command is blacklisted"
     - "blacklist add <command> [mode] [reason]|Add a manual entry"
@@ -57,6 +65,7 @@ messages:
   info.language: "&7Language: &f{code} &7(per-player={perplayer})"
   info.scan: "&7Auto-scan: &f{enabled} &7(dry-run={dry}, last={last})"
   info.provider: "&7Ban provider: &f{provider}"
+  info.jarhash: "&7Plugin JAR SHA-256: &f{hash}"
 
   # --- Scan ---
   scan.done: "&aScan finished: &f{count}&a blacklist entries total."
@@ -90,6 +99,8 @@ messages:
   blacklist.field.plugin: "plugin"
   blacklist.field.permission: "permission"
   blacklist.field.reason: "reason"
+  blacklist.field.world: "world"
+  blacklist.field.allowed_groups: "allowed groups"
   blacklist.field.added_by: "added by"
   blacklist.field.added_at: "added at"
   blacklist.pending: "pending"
@@ -99,8 +110,9 @@ messages:
   blacklist.added: "&aAdded &7{command} &ato the blacklist (source: {source}, mode: {mode})."
   blacklist.remove.usage: "&7Usage: &f/acm blacklist remove <id|command>"
   blacklist.removed: "&aRemoved &7{count} &aentry/entries for &7{command}&a."
-  blacklist.whitelist.usage: "&7Usage: &f/acm blacklist whitelist <command>"
+  blacklist.whitelist.usage: "&7Usage: &f/acm blacklist whitelist <command> [group]"
   blacklist.whitelist.none: "&7No auto-scan entries found for &f{command}&7."
+  blacklist.whitelist.group: "&aGroup &f{group} &ais now allowed to use &f{command}&a. The entry stays blacklisted for other groups."
   blacklist.whitelist.done: "&aRemoved &f{count} &aauto-scan entries for &f{command}&a. Add it to auto-blacklist.exclude.commands to keep it that way."
   blacklist.purge: "&aPurged &f{count} &aauto-scan entries that no longer match a registered command."
 
@@ -142,8 +154,44 @@ messages:
   export.failed: "&cExport failed: {error}"
   import.usage: "&7Usage: &f/acm import <file>"
   import.notfound: "&cFile not found: &f{file}"
+  import.failed: "&cImport failed: {error}"
   import.default-reason: "Imported"
   import.done: "&aImported &f{added} &aentries (&f{skipped} &askipped as duplicates)."
+
+  # --- Plugins / identity ---
+  plugins.header: "&b=== Plugin Identity ==="
+  plugins.line: "&7{plugin} &8- &f{status} &7(conf={confidence}%) {project}"
+  plugins.empty: "&7No plugin identity data yet. Run &f/acm scan identify&7."
+  plugins.identify.done: "&aPlugin identification complete."
+
+  # --- Conflicts ---
+  conflicts.usage: "&7Usage: &f/acm conflicts [page]"
+  conflicts.empty: "&7No LuckPerms conflicts found."
+  conflicts.header: "&b=== LuckPerms Conflicts (page {page}/{total}) ==="
+  conflicts.line: "&7[{severity}] &f{command} &7group={group} perm={permission} source={source}"
+  conflicts.reminder: "&c[Security] {count} LuckPerms conflict(s) remain open. Run &f/acm conflicts&7 to review (blacklist will NOT be removed automatically)."
+  conflicts.ignored: "&aConflict ignored."
+  conflicts.resolved: "&aConflict marked resolved."
+  conflicts.action.blocked: "&cThis action requires &fsaryuantichatmanager.admin&c."
+
+  # --- Audit ---
+  audit.usage: "&7Usage: &f/acm audit [info|ack|ignore]"
+  audit.empty: "&7No open audit findings."
+  audit.header: "&b=== Permission Audit (page {page}/{total}) ==="
+  audit.line: "&7[{severity}] &f{subject} ({type}) &7has &f{node} &8origin={origin}"
+  audit.info.title: "&b=== Audit Finding #{id} ==="
+  audit.ack: "&aFinding acknowledged."
+  audit.ignore: "&aSubject/node added to audit ignore list."
+  audit.resolved: "&aResolved findings: &f{count}"
+  audit.reminder: "&c[Security Audit] {count} permission finding(s) need review. Run &f/acm audit&7."
+
+  # --- Security ---
+  security.header: "&b=== Security Audit ==="
+  security.jar-hash: "&7Plugin JAR SHA-256: &f{hash}"
+  security.critical: "&c[CRITICAL] {msg}"
+  security.warning: "&e[WARNING] {msg}"
+  security.ok: "&a[OK] {msg}"
+  security.done: "&7Run again with &f/acm security&7."
 
   # --- Alerts / punishment (config-driven strings also exist) ---
   alert.broadcast: "&7[Alert] &7{PLAYER} &fwas detected trying to use &7{CMDBLACKLIST} &fon {TIME}"

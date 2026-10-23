@@ -9,8 +9,10 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerCommandSendEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -47,7 +49,7 @@ public class PlayerListener implements Listener {
             return;
         }
         String matched = plugin.getBlacklist().matchWithNested(raw);
-        if (matched != null) {
+        if (matched != null && !plugin.getBlacklist().isAllowedFor(player, matched)) {
             event.setCancelled(true);
             plugin.getCommandHandler().onBlockedCommand(player, raw, matched, "bukkit");
         }
@@ -94,7 +96,7 @@ public class PlayerListener implements Listener {
         // Geyser/Floodgate command attempts can arrive as chat text.
         if (message.startsWith("/")) {
             String matched = plugin.getBlacklist().matchWithNested(message);
-            if (matched != null) {
+            if (matched != null && !plugin.getBlacklist().isAllowedFor(player, matched)) {
                 event.setCancelled(true);
                 plugin.getCommandHandler().onBlockedCommand(player, message, matched, "chat");
                 return;
@@ -127,6 +129,92 @@ public class PlayerListener implements Listener {
                 }
             }
         }
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onServerCommand(@NotNull org.bukkit.event.server.ServerCommandEvent event) {
+        String raw = event.getCommand();
+        if (raw == null || raw.isBlank()) return;
+        boolean block = false;
+        if (event.getSender() instanceof org.bukkit.command.BlockCommandSender) {
+            block = !plugin.getConfigModule().getBoolean("blacklist.sources.command-block", false);
+        } else if (event.getSender() instanceof org.bukkit.command.RemoteConsoleCommandSender) {
+            block = !plugin.getConfigModule().getBoolean("blacklist.sources.rcon", false);
+        }
+        String matched = plugin.getBlacklist().matchWithNested(raw);
+        if (matched != null && block) {
+            event.setCancelled(true);
+            plugin.getLogger().warning("Blocked blacklisted command from " + event.getSender().getName()
+                    + ": " + abbreviate(raw));
+            if (event.getSender() instanceof Player p) {
+                plugin.getAlertManager().sendAlert(p, matched, raw, "server");
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onEditBook(@NotNull org.bukkit.event.player.PlayerEditBookEvent event) {
+        if (event.getPlayer() == null || plugin.canBypass(event.getPlayer())) return;
+        if (event.getNewBookMeta() == null) return;
+        for (String page : event.getNewBookMeta().getPages()) {
+            if (unsafeInteractiveText(page)) {
+                event.setCancelled(true);
+                return;
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onSignChange(@NotNull org.bukkit.event.block.SignChangeEvent event) {
+        if (event.getPlayer() == null || plugin.canBypass(event.getPlayer())) return;
+        for (String line : event.getLines()) {
+            if (line == null) continue;
+            String plain = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+                    .serialize(plugin.getMsg().parse(line));
+            if (unsafeInteractiveText(plain) || plugin.getBlacklist().matchWithNested(plain) != null) {
+                event.setCancelled(true);
+                return;
+            }
+        }
+    }
+
+    private boolean unsafeInteractiveText(@Nullable String text) {
+        if (text == null) return false;
+        String lower = text.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("<click:") || lower.contains("clickevent") || lower.contains("run_command")
+                || lower.contains("suggest_command") || lower.contains("open_url")) return true;
+        return plugin.getBlacklist().matchWithNested(text) != null;
+    }
+
+    @EventHandler
+    public void onJoin(@NotNull PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        if (player == null) return;
+        if (!player.hasPermission("saryuantichatmanager.alerts")) return;
+        plugin.getLib().getSchedulerModule().runSyncLater(() -> {
+            try {
+                if (plugin.getConflictDetector() != null && plugin.getConflictDetector().isEnabled()) {
+                    var open = plugin.getConflictDetector().getOpen();
+                    if (!open.isEmpty()) {
+                        String msg = plugin.getLang().message("conflicts.reminder",
+                                "&c[Security] {count} LuckPerms conflict(s) remain open. Run &f/acm conflicts&7 to review (blacklist will NOT be removed automatically).")
+                                .replace("{count}", String.valueOf(open.size()));
+                        player.sendMessage(plugin.getMsg().parse(msg));
+                    }
+                }
+            } catch (Throwable ignored) {}
+            try {
+                if (plugin.getPermissionAudit() != null && plugin.getPermissionAudit().isEnabled()) {
+                    var open = plugin.getPermissionAudit().getOpen();
+                    if (!open.isEmpty()) {
+                        String msg = plugin.getLang().message("audit.reminder",
+                                "&c[Security Audit] {count} permission finding(s) need review. Run &f/acm audit&7.")
+                                .replace("{count}", String.valueOf(open.size()));
+                        player.sendMessage(plugin.getMsg().parse(msg));
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }, 40L);
     }
 
     @EventHandler

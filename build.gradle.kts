@@ -44,6 +44,10 @@ allprojects {
             name = "codemc"
             setUrl("https://repo.codemc.io/repository/maven-public/")
         }
+        maven {
+            name = "placeholderapi"
+            setUrl("https://repo.extendedclip.com/content/repositories/placeholderapi/")
+        }
     }
 }
 

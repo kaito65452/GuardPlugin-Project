@@ -39,35 +39,28 @@ public class AlertManager {
         reloadConfig();
     }
 
-    public void reloadConfig() {
-        enabled = plugin.getConfigModule().getBoolean("alert.enabled", true);
-        template = plugin.getConfigModule().getString("alert.template", "boxed");
-        broadcastTarget = plugin.getConfigModule().getString("alert.broadcast-target", "global");
-        serverName = plugin.getConfigModule().getString("alert.server-name", "Server Security");
-        timezone = plugin.getConfigModule().getString("timezone",
-                plugin.getConfigModule().getString("alert.timezone", "WIB"));
-        sound = plugin.getConfigModule().getString("alert.sound", "BLOCK_NOTE_BLOCK_HAT");
-        loadTemplates();
-    }
-
     private void loadTemplates() {
         templateCache.clear();
         // Templates live in the language files (templates.<name>) as required by
         // the spec. config.yml templates are optional per-install overrides.
-        var langSection = plugin.getLang().section("templates");
-        if (langSection != null) {
-            for (String name : langSection.getKeys(false)) {
-                String raw = langSection.getString(name);
-                if (raw != null && !raw.isBlank()) templateCache.put(name, raw);
+        try {
+            org.bukkit.configuration.ConfigurationSection langSection = plugin.getLang().section("templates");
+            if (langSection != null) {
+                for (String name : langSection.getKeys(false)) {
+                    String raw = langSection.getString(name);
+                    if (raw != null && !raw.isBlank()) templateCache.put(name, raw);
+                }
             }
-        }
-        var section = plugin.getConfigModule().get().getConfigurationSection("templates");
-        if (section != null) {
-            for (String name : section.getKeys(false)) {
-                String raw = section.getString(name);
-                if (raw != null && !raw.isBlank()) templateCache.put(name, raw);
+        } catch (Exception ignored) {}
+        try {
+            org.bukkit.configuration.ConfigurationSection section = plugin.getConfigModule().get().getConfigurationSection("templates");
+            if (section != null) {
+                for (String name : section.getKeys(false)) {
+                    String raw = section.getString(name);
+                    if (raw != null && !raw.isBlank()) templateCache.put(name, raw);
+                }
             }
-        }
+        } catch (Exception ignored) {}
         // Ensure defaults exist.
         templateCache.putIfAbsent("boxed",
                 "<#FF5555>=================================\n"
@@ -89,9 +82,41 @@ public class AlertManager {
                 "<#FF5555>⚠ <#FFFFFF>{PLAYER} <#AAAAAA>→ <#FFAA00>{CMDBLACKLIST} <#555555>({TIME})");
     }
 
+    private final java.util.concurrent.ConcurrentHashMap<java.util.UUID, Long> lastAlert =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private int alertCooldownMs = 2000;
+    private int alertPerMinute = 30;
+    private long minuteWindowStart = System.currentTimeMillis();
+    private int minuteCount = 0;
+
+    public void reloadConfig() {
+        enabled = plugin.getConfigModule().getBoolean("alert.enabled", true);
+        template = plugin.getConfigModule().getString("alert.template", "boxed");
+        broadcastTarget = plugin.getConfigModule().getString("alert.broadcast-target", "global");
+        serverName = plugin.getConfigModule().getString("alert.server-name", "Server Security");
+        timezone = plugin.getConfigModule().getString("timezone",
+                plugin.getConfigModule().getString("alert.timezone", "WIB"));
+        sound = plugin.getConfigModule().getString("alert.sound", "BLOCK_NOTE_BLOCK_HAT");
+        alertCooldownMs = plugin.getConfigModule().getInt("security.alert-cooldown-ms", 2000);
+        alertPerMinute = plugin.getConfigModule().getInt("security.alert-per-minute", 30);
+        loadTemplates();
+    }
+
     public void sendAlert(@NotNull Player player, @NotNull String matchedCommand,
                           @NotNull String rawInput, @NotNull String world) {
         if (!enabled) return;
+        long now = System.currentTimeMillis();
+        long last = lastAlert.getOrDefault(player.getUniqueId(), 0L);
+        if (now - last < Math.max(0, alertCooldownMs)) return;
+        lastAlert.put(player.getUniqueId(), now);
+        if (alertPerMinute > 0) {
+            if (now - minuteWindowStart >= 60000L) {
+                minuteWindowStart = now;
+                minuteCount = 0;
+            }
+            minuteCount++;
+            if (minuteCount > alertPerMinute) return;
+        }
 
         id.saryu.libcore.message.MessageModule.Placeholder placeholder = new id.saryu.libcore.message.MessageModule.Placeholder();
         Map<String, String> vars = new HashMap<>();

@@ -34,6 +34,7 @@ public class PacketInterceptor implements PacketLayer.CommandInterceptor {
             matched = plugin.getBlacklist().matchWithNested(command);
         }
         if (matched == null) return false;
+        if (!"command-too-long".equals(matched) && plugin.getBlacklist().isAllowedFor(player, matched)) return false;
 
         final String matchedCommand = matched;
         final String raw = command.length() > 256 ? command.substring(0, 256) : command;

@@ -153,6 +153,28 @@ public class PermissionModule {
         return result;
     }
 
+    /** Group names for admin tab completion; empty when LuckPerms is absent. */
+    public @NotNull List<String> getLoadedGroupNames() {
+        List<String> result = new java.util.ArrayList<>();
+        if (!luckpermsAvailable) return result;
+        try {
+            Object gm = groupManager(luckPermsInstance());
+            if (gm == null) return result;
+            Class<?> gmIface = Class.forName("net.luckperms.api.model.group.GroupManager");
+            Object rawGroups = gmIface.getMethod("getLoadedGroups").invoke(gm);
+            if (rawGroups instanceof Collection<?> groups) {
+                Class<?> groupIface = Class.forName("net.luckperms.api.model.group.Group");
+                for (Object group : groups) {
+                    Object nameObj = groupIface.getMethod("getName").invoke(group);
+                    if (nameObj != null) result.add(nameObj.toString());
+                }
+            }
+            java.util.Collections.sort(result);
+        } catch (Throwable ignored) {
+        }
+        return result;
+    }
+
     public @NotNull List<HolderSnapshot> snapshotUsers() {
         List<HolderSnapshot> result = new java.util.ArrayList<>();
         if (!luckpermsAvailable) return result;

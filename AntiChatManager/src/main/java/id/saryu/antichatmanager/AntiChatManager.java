@@ -1,13 +1,18 @@
 package id.saryu.antichatmanager;
 
 import id.saryu.antichatmanager.alert.AlertManager;
+import id.saryu.antichatmanager.audit.PermissionAudit;
 import id.saryu.antichatmanager.blacklist.BlacklistManager;
 import id.saryu.antichatmanager.command.ACMCommand;
 import id.saryu.antichatmanager.command.CommandHandler;
+import id.saryu.antichatmanager.conflict.ConflictDetector;
+import id.saryu.antichatmanager.identity.PluginIdentityService;
 import id.saryu.antichatmanager.listener.PlayerListener;
 import id.saryu.antichatmanager.packet.PacketInterceptor;
 import id.saryu.antichatmanager.punishment.PunishmentTracker;
 import id.saryu.antichatmanager.scan.AutoScanner;
+import id.saryu.antichatmanager.security.AuditLog;
+import id.saryu.antichatmanager.security.SecurityAudit;
 import id.saryu.antichatmanager.storage.Storage;
 import id.saryu.antichatmanager.util.RateLimitModule;
 import id.saryu.libcore.BuildInfo;
@@ -46,6 +51,11 @@ public class AntiChatManager extends JavaPlugin {
     private PunishmentTracker punishmentTracker;
     private AlertManager alertManager;
     private AutoScanner autoScanner;
+    private PluginIdentityService pluginIdentityService;
+    private ConflictDetector conflictDetector;
+    private PermissionAudit permissionAudit;
+    private SecurityAudit securityAudit;
+    private AuditLog auditLog;
     private PacketInterceptor packetInterceptor;
     private PlayerListener playerListener;
     private ACMCommand acmCommand;
@@ -94,6 +104,12 @@ public class AntiChatManager extends JavaPlugin {
         packetInterceptor = new PacketInterceptor(this);
         playerListener = new PlayerListener(this);
         commandHandler = new CommandHandler(this);
+        pluginIdentityService = new PluginIdentityService(this);
+        conflictDetector = new ConflictDetector(this);
+        permissionAudit = new PermissionAudit(this);
+        securityAudit = new SecurityAudit(this);
+        auditLog = new AuditLog(this);
+        securityAudit.runStartupAudit();
 
         // Packet-layer interception (only active when PacketEvents is installed).
         PacketLayer packetLayer = lib.getPacketLayer();
@@ -107,6 +123,18 @@ public class AntiChatManager extends JavaPlugin {
         autoScanner = new AutoScanner(this);
         autoScanner.start();
 
+        pluginIdentityService.start();
+        conflictDetector.start();
+        permissionAudit.start();
+
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+            try {
+                new id.saryu.antichatmanager.integration.ACMPlaceholderExpansion(this).register();
+            } catch (Throwable t) {
+                getLogger().warning("PlaceholderAPI expansion registration failed: " + t.getMessage());
+            }
+        }
+
         Bukkit.getPluginManager().registerEvents(playerListener, this);
 
         getLogger().info("AntiChatManager " + buildInfo.display() + " enabled. "
@@ -118,6 +146,9 @@ public class AntiChatManager extends JavaPlugin {
     @Override
     public void onDisable() {
         if (autoScanner != null) autoScanner.stop();
+        if (pluginIdentityService != null) pluginIdentityService.stop();
+        if (conflictDetector != null) conflictDetector.stop();
+        if (permissionAudit != null) permissionAudit.stop();
         if (packetInterceptor != null && lib != null) {
             lib.getPacketLayer().unregisterCommandInterceptor(packetInterceptor);
         }
@@ -147,6 +178,28 @@ public class AntiChatManager extends JavaPlugin {
     public PunishmentTracker getPunishmentTracker() { return punishmentTracker; }
     public AlertManager getAlertManager() { return alertManager; }
     public AutoScanner getAutoScanner() { return autoScanner; }
+    public PluginIdentityService getPluginIdentityService() { return pluginIdentityService; }
+    public ConflictDetector getConflictDetector() { return conflictDetector; }
+    public PermissionAudit getPermissionAudit() { return permissionAudit; }
+    public SecurityAudit getSecurityAudit() { return securityAudit; }
+    public AuditLog getAuditLog() { return auditLog; }
+    public id.saryu.antichatmanager.api.AntiChatManagerAPI getApi() {
+        return new id.saryu.antichatmanager.api.AntiChatManagerAPI(this);
+    }
+
+    /** Reload every runtime component; used by /acm reload and the public API. */
+    public void reloadAll() {
+        config.reload();
+        lang.reload();
+        lib.getDatabaseModule().reconfigure(config);
+        rateLimit.reloadConfig();
+        alertManager.reloadConfig();
+        punishmentTracker.reloadConfig();
+        autoScanner.reloadConfig();
+        pluginIdentityService.reloadConfig();
+        conflictDetector.reloadConfig();
+        permissionAudit.reloadConfig();
+    }
     public PacketInterceptor getPacketInterceptor() { return packetInterceptor; }
     public PlayerListener getPlayerListener() { return playerListener; }
     public ACMCommand getAcmCommand() { return acmCommand; }

@@ -275,6 +275,15 @@ public class AutoScanner {
             }
             if (lpAdded > 0) lastCountByPlugin.put("LuckPerms", lpAdded);
         }
+        // Re-scan conflicts and audit findings after auto-blacklist changes.
+        plugin.getLib().getSchedulerModule().runSyncLater(() -> {
+            try {
+                if (plugin.getConflictDetector() != null) plugin.getConflictDetector().scan();
+            } catch (Throwable ignored) {}
+            try {
+                if (plugin.getPermissionAudit() != null) plugin.getPermissionAudit().scan();
+            } catch (Throwable ignored) {}
+        }, 40L);
 
         plugin.getStorage().recordScan(null, null, null, dryRun ? "scan-dry-run" : "scan", added);
 

@@ -3,7 +3,7 @@
 
 # Config schema version (auto-migrated by SaryuLibCore).
 config:
-  version: 1
+  version: 2
 
 # Language file code (eng_US | id_ID). Fallback to eng_US if missing keys.
 language: eng_US
@@ -117,6 +117,43 @@ database:
   # Days to retain violation/scan history (0 = keep forever).
   retention-days: 30
 
+# --- Auto-blacklist (plugin identity via Modrinth/Hangar) ---
+plugin-identity:
+  enabled: true
+  modrinth:
+    enabled: true
+    api-url: https://api.modrinth.com/v2
+    user-agent: "Saryu/AntiChatManager/{VERSION} (contact-admin)"
+    cache-ttl: 7d
+    use-categories: true
+    hangar-fallback: true
+    send-only-hashes: true
+  min-confidence: 70
+
+# --- LuckPerms conflict detection ---
+conflict-detection:
+  enabled: true
+  check-users: false
+  staff-min-weight: 50
+  notify-staff-on-join: true
+  reminder-interval: 6h
+  dangerous-commands: [op, deop, stop, reload, execute, lp, luckperms, plugman, whitelist, ban, sudo, give, gamemode, fill, setblock]
+  ignore: []
+  allowed-groups: {}
+
+# --- Permission bypass/audit ---
+audit:
+  enabled: true
+  scan-on-start: true
+  scan-on-luckperms-change: true
+  notify-interval: 6h
+  staff-groups: []
+  ignore-groups: []
+  ignore-users: []
+  ignore-permissions: []
+  min-risk-to-notify: MEDIUM
+  auto-fix: false
+
 # --- Security ---
 security:
   # Maximum command length before rejection (also blacklist.max-command-length).
@@ -130,6 +167,10 @@ security:
   block-control-chars: true
   block-raw-section: true
   block-zero-width: true
+  alert-cooldown-ms: 2000
+  alert-per-minute: 30
+  # Warn once when a plugin JAR changes compared with the stored baseline.
+  jar-baseline: true
 
 # --- Webhook (Discord) ---
 webhook:

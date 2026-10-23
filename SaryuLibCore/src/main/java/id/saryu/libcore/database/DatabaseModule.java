@@ -228,6 +228,12 @@ public class DatabaseModule {
                 applySchemaV2(c);
                 setSchemaVersion(c, 2);
                 schemaVersion = 2;
+                current = 2;
+            }
+            if (current < 3) {
+                applySchemaV3(c);
+                setSchemaVersion(c, 3);
+                schemaVersion = 3;
             }
         } catch (SQLException e) {
             plugin.getLogger().log(Level.WARNING, "Migration failed", e);
@@ -413,6 +419,25 @@ public class DatabaseModule {
                 stmt.execute(sql);
             } catch (SQLException e) {
                 plugin.getLogger().log(Level.FINE, "Schema v2 statement skipped: " + sql + " (" + e.getMessage() + ")");
+            }
+        }
+    }
+
+    /**
+     * v3: per-entry allowed LuckPerms groups (whitelist specific groups without
+     * a full bypass). The column is nullable so old rows keep their meaning.
+     */
+    private void applySchemaV3(Connection c) {
+        String[] stmts = {
+            "ALTER TABLE acm_blacklist ADD COLUMN allowed_groups TEXT"
+        };
+        for (String sql : stmts) {
+            try (Statement stmt = c.createStatement()) {
+                stmt.execute(sql);
+            } catch (SQLException e) {
+                // Most commonly the column already exists (manual migration or a
+                // previous partial run); this migration must remain idempotent.
+                plugin.getLogger().log(Level.FINE, "Schema v3 statement skipped: " + e.getMessage());
             }
         }
     }

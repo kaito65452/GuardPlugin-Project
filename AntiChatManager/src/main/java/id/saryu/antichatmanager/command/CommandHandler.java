@@ -29,6 +29,17 @@ public class CommandHandler {
         }
         Player player = (Player) sender;
 
+        // Notify other plugins without allowing them to un-block the command.
+        try {
+            org.bukkit.Bukkit.getPluginManager().callEvent(
+                    new id.saryu.antichatmanager.api.BlockedCommandEvent(player, rawInput, matchedCommand, source));
+        } catch (Throwable ignored) {
+        }
+        if (plugin.getAuditLog() != null) {
+            plugin.getAuditLog().write("BLOCKED", player.getName() + " " + player.getUniqueId()
+                    + " command=" + matchedCommand + " source=" + source);
+        }
+
         // Record violation.
         String world = player.getWorld().getName();
         plugin.getStorage().recordViolation(

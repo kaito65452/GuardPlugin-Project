@@ -28,10 +28,18 @@ messages:
   # --- Bantuan ---
   help.header: "&b=== Daftar Perintah AntiChatManager ==="
   help.line: "&7/{cmd} &f{sub} &8- &7{desc}"
+  help.sub.plugins: "Tampilkan identitas dan verifikasi plugin"
+  help.sub.conflicts: "Tinjau konflik perintah LuckPerms"
+  help.sub.audit: "Tinjau temuan audit permission"
+  help.sub.security: "Jalankan pemeriksaan keamanan dan rekomendasi"
   help.rows:
     - "reload|Muat ulang konfigurasi dan file bahasa"
     - "info|Tampilkan status plugin, database, dan blacklist"
-    - "scan [report|sources]|Jalankan pemindaian atau tampilkan laporan terakhir"
+    - "scan [report|sources|identify]|Jalankan pemindaian, tampilkan laporan terakhir, atau identifikasi plugin"
+    - "plugins|Tampilkan identitas dan verifikasi plugin"
+    - "conflicts [halaman|ignore|allow]|Tinjau konflik perintah LuckPerms"
+    - "audit [halaman|info|ack|ignore]|Tinjau temuan audit permission"
+    - "security|Jalankan pemeriksaan keamanan dan rekomendasi"
     - "blacklist list [halaman] [sumber]|Tampilkan entri blacklist"
     - "blacklist check <perintah>|Periksa apakah perintah masuk blacklist"
     - "blacklist add <perintah> [mode] [alasan]|Tambahkan entri manual"
@@ -57,6 +65,7 @@ messages:
   info.language: "&7Bahasa: &f{code} &7(per-pemain={perplayer})"
   info.scan: "&7Pemindaian otomatis: &f{enabled} &7(dry-run={dry}, terakhir={last})"
   info.provider: "&7Penyedia ban: &f{provider}"
+  info.jarhash: "&7SHA-256 JAR plugin: &f{hash}"
 
   # --- Pemindaian ---
   scan.done: "&aPemindaian selesai: total &f{count}&a entri blacklist."
@@ -90,6 +99,8 @@ messages:
   blacklist.field.plugin: "plugin"
   blacklist.field.permission: "izin"
   blacklist.field.reason: "alasan"
+  blacklist.field.world: "dunia"
+  blacklist.field.allowed_groups: "grup yang diizinkan"
   blacklist.field.added_by: "ditambahkan oleh"
   blacklist.field.added_at: "ditambahkan pada"
   blacklist.pending: "tertunda"
@@ -99,8 +110,9 @@ messages:
   blacklist.added: "&aMenambahkan &7{command} &ake daftar hitam (sumber: {source}, mode: {mode})."
   blacklist.remove.usage: "&7Penggunaan: &f/acm blacklist remove <id|perintah>"
   blacklist.removed: "&aMenghapus &7{count} &aentri untuk &7{command}&a."
-  blacklist.whitelist.usage: "&7Penggunaan: &f/acm blacklist whitelist <perintah>"
+  blacklist.whitelist.usage: "&7Penggunaan: &f/acm blacklist whitelist <perintah> [grup]"
   blacklist.whitelist.none: "&7Tidak ada entri hasil pemindaian otomatis untuk &f{command}&7."
+  blacklist.whitelist.group: "&aGrup &f{group} &akini boleh memakai &f{command}&a. Entri tetap diblokir untuk grup lain."
   blacklist.whitelist.done: "&aMenghapus &f{count} &aentri hasil pemindaian untuk &f{command}&a. Tambahkan ke auto-blacklist.exclude.commands agar tidak muncul lagi."
   blacklist.purge: "&aMembersihkan &f{count} &aentri hasil pemindaian yang perintahnya sudah tidak terdaftar."
 
@@ -142,8 +154,44 @@ messages:
   export.failed: "&cEkspor gagal: {error}"
   import.usage: "&7Penggunaan: &f/acm import <file>"
   import.notfound: "&cFile tidak ditemukan: &f{file}"
+  import.failed: "&cImpor gagal: {error}"
   import.default-reason: "Diimpor"
   import.done: "&aBerhasil mengimpor &f{added} &aentri (&f{skipped} &adilewati karena duplikat)."
+
+  # --- Plugin / identitas ---
+  plugins.header: "&b=== Identitas Plugin ==="
+  plugins.line: "&7{plugin} &8- &f{status} &7(conf={confidence}%) {project}"
+  plugins.empty: "&7Belum ada data identitas plugin. Jalankan &f/acm scan identify&7."
+  plugins.identify.done: "&aIdentifikasi plugin selesai."
+
+  # --- Konflik ---
+  conflicts.usage: "&7Penggunaan: &f/acm conflicts [halaman]"
+  conflicts.empty: "&7Tidak ada konflik LuckPerms ditemukan."
+  conflicts.header: "&b=== Konflik LuckPerms (halaman {page}/{total}) ==="
+  conflicts.line: "&7[{severity}] &f{command} &7grup={group} perm={permission} sumber={source}"
+  conflicts.reminder: "&c[Keamanan] {count} konflik LuckPerms masih terbuka. Jalankan &f/acm conflicts&7 untuk meninjau (blacklist TIDAK akan dihapus otomatis)."
+  conflicts.ignored: "&aKonflik diabaikan."
+  conflicts.resolved: "&aKonflik ditandai terselesaikan."
+  conflicts.action.blocked: "&cAksi ini membutuhkan &fsaryuantichatmanager.admin&c."
+
+  # --- Audit ---
+  audit.usage: "&7Penggunaan: &f/acm audit [info|ack|ignore]"
+  audit.empty: "&7Tidak ada temuan audit terbuka."
+  audit.header: "&b=== Audit Permission (halaman {page}/{total}) ==="
+  audit.line: "&7[{severity}] &f{subject} ({type}) &7memiliki &f{node} &8asal={origin}"
+  audit.info.title: "&b=== Detail Temuan Audit #{id} ==="
+  audit.ack: "&aTemuan diakui."
+  audit.ignore: "&aGrup/user/node ditambahkan ke daftar abaikan audit."
+  audit.resolved: "&aTemuan terselesaikan: &f{count}"
+  audit.reminder: "&c[Audit Keamanan] {count} temuan permission perlu ditinjau. Jalankan &f/acm audit&7."
+
+  # --- Keamanan ---
+  security.header: "&b=== Audit Keamanan ==="
+  security.jar-hash: "&7SHA-256 JAR Plugin: &f{hash}"
+  security.critical: "&c[KRITIS] {msg}"
+  security.warning: "&e[PERINGATAN] {msg}"
+  security.ok: "&a[OK] {msg}"
+  security.done: "&7Jalankan lagi dengan &f/acm security&7."
 
   # --- Alert / hukuman (teks dari config juga tersedia) ---
   alert.broadcast: "&7[Peringatan] &7{PLAYER} &ftertangkap mencoba menggunakan &7{CMDBLACKLIST} &fpada {TIME}"

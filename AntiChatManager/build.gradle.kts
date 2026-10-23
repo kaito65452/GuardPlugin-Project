@@ -40,4 +40,5 @@ dependencies {
     // Provided by the server + SaryuLibCore at runtime; NOT bundled.
     compileOnly(libs.paper.api)
     compileOnly(libs.adventure.minimessage)
+    compileOnly(libs.placeholderapi)
 }
