@@ -28,6 +28,9 @@ run/
 server/
 test-server/
 
+# === Catatan prompt / spesifikasi lokal ===
+prompt-*.md
+
 # === Data & rahasia (JANGAN di-commit) ===
 .env
 *.env
