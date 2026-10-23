@@ -14,7 +14,10 @@ val buildChannel = rootProject.extra["buildChannel"] as String
 val buildInfoDir = layout.buildDirectory.dir("generated/build-info")
 
 val generateBuildInfo = tasks.register("generateBuildInfo") {
-    outputs.dir(buildInfoDir)
+    inputs.property("buildVersion", buildVersion)
+    inputs.property("buildCommit", buildCommit)
+    inputs.property("buildChannel", buildChannel)
+    outputs.file(buildInfoDir.map { it.file("build-info.properties") })
     doLast {
         val file = buildInfoDir.get().file("build-info.properties").asFile
         file.parentFile.mkdirs()
@@ -28,6 +31,9 @@ sourceSets.main {
 }
 tasks.processResources {
     dependsOn(generateBuildInfo)
+    inputs.property("buildVersion", buildVersion)
+    inputs.property("buildCommit", buildCommit)
+    inputs.property("buildChannel", buildChannel)
     filesMatching("plugin.yml") {
         expand("version" to buildVersion)
     }

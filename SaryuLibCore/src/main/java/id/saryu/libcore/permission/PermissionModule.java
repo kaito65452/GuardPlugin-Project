@@ -28,6 +28,7 @@ public class PermissionModule {
     private final Set<String> adminKeywords = new HashSet<>();
     private final Set<String> memberSafeCommands = new HashSet<>();
     private final boolean luckpermsAvailable;
+    private final List<Object> luckPermsSubscriptions = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     public PermissionModule(@NotNull SaryuLib plugin) {
         this.plugin = plugin;
@@ -66,6 +67,86 @@ public class PermissionModule {
 
     public boolean hasLuckPerms() {
         return luckpermsAvailable;
+    }
+
+    /**
+     * Subscribe to LuckPerms mutation/recalculation events without a compile-time
+     * dependency. The callback may run on a LuckPerms thread; callers must
+     * debounce and schedule their own work. Returns the number of event types
+     * successfully subscribed (0 when LuckPerms is absent or unsupported).
+     */
+    public int registerChangeListener(@NotNull Runnable callback) {
+        if (!luckpermsAvailable) return 0;
+        try {
+            Object lp = luckPermsInstance();
+            if (lp == null) return 0;
+            Class<?> api = Class.forName("net.luckperms.api.LuckPerms");
+            Object bus = api.getMethod("getEventBus").invoke(lp);
+            if (bus == null) return 0;
+            Class<?> busType = Class.forName("net.luckperms.api.event.EventBus");
+            java.lang.reflect.Method subscribe = busType.getMethod(
+                    "subscribe", Class.class, java.util.function.Consumer.class);
+            java.util.function.Consumer<Object> consumer = event -> {
+                try {
+                    callback.run();
+                } catch (Throwable t) {
+                    plugin.getLogger().log(Level.FINE, "LuckPerms change callback failed", t);
+                }
+            };
+            Object proxy = java.lang.reflect.Proxy.newProxyInstance(
+                    PermissionModule.class.getClassLoader(),
+                    new Class<?>[]{java.util.function.Consumer.class},
+                    (p, method, args) -> {
+                        if (method.getName().equals("accept")) {
+                            consumer.accept(args == null || args.length == 0 ? null : args[0]);
+                            return null;
+                        }
+                        if (method.getName().equals("toString")) return "AntiChatManager-LuckPermsListener";
+                        if (method.getName().equals("hashCode")) return System.identityHashCode(p);
+                        if (method.getName().equals("equals")) return p == (args == null ? null : args[0]);
+                        return null;
+                    });
+            int count = 0;
+            for (String eventClass : List.of(
+                    "net.luckperms.api.event.node.NodeMutateEvent",
+                    "net.luckperms.api.event.group.GroupDataRecalculateEvent",
+                    "net.luckperms.api.event.user.UserDataRecalculateEvent")) {
+                try {
+                    Class<?> type = Class.forName(eventClass);
+                    Object subscription = subscribe.invoke(bus, type, proxy);
+                    if (subscription != null) {
+                        luckPermsSubscriptions.add(subscription);
+                        count++;
+                    }
+                } catch (Throwable ignored) {
+                    // Event class differs between LuckPerms versions; try the next.
+                }
+            }
+            if (count > 0) {
+                plugin.getLogger().info("LuckPerms change events subscribed (" + count
+                        + "); conflict/audit rescans are debounced.");
+            }
+            return count;
+        } catch (Throwable t) {
+            plugin.getLogger().log(Level.FINE, "Could not subscribe to LuckPerms events: " + t.getMessage());
+            return 0;
+        }
+    }
+
+    /** Close LuckPerms event subscriptions held by this module. */
+    public void unregisterChangeListeners() {
+        for (Object subscription : luckPermsSubscriptions) {
+            try {
+                subscription.getClass().getMethod("close").invoke(subscription);
+            } catch (Throwable ignored) {
+                try {
+                    subscription.getClass().getMethod("unsubscribe").invoke(subscription);
+                } catch (Throwable ignored2) {
+                    // Best-effort; the plugin is shutting down anyway.
+                }
+            }
+        }
+        luckPermsSubscriptions.clear();
     }
 
     /* ----------------------------------------------------------------------

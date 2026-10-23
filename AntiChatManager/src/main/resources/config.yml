@@ -3,7 +3,7 @@
 
 # Config schema version (auto-migrated by SaryuLibCore).
 config:
-  version: 2
+  version: 3
 
 # Language file code (eng_US | id_ID). Fallback to eng_US if missing keys.
 language: eng_US

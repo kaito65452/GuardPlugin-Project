@@ -69,7 +69,7 @@ public class IntegrationModule {
                 plugin.getLogger().warning("Webhook rejected: only HTTPS Discord hosts are allowed.");
                 return;
             }
-            String json = "{\"content\":\"" + escapeJson(content)
+            String json = "{\"content\":\"" + escapeJson(escapeMarkdown(content))
                     + "\",\"allowed_mentions\":{\"parse\":[]}}";
             plugin.getRepositoryClient().post(url, "Saryu-AntiChatManager", json)
                     .exceptionally(e -> {
@@ -79,6 +79,21 @@ public class IntegrationModule {
         } catch (Exception e) {
             plugin.getLogger().warning("Webhook rejected: " + e.getMessage());
         }
+    }
+
+    /** Prevent player-controlled text from injecting Discord markdown/mentions. */
+    private static String escapeMarkdown(String s) {
+        StringBuilder out = new StringBuilder(s.length() + 16);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '\\' || c == '*' || c == '_' || c == '~' || c == '`'
+                    || c == '>' || c == '|' || c == '[' || c == ']'
+                    || c == '(' || c == ')') {
+                out.append('\\');
+            }
+            out.append(c);
+        }
+        return out.toString();
     }
 
     private static String escapeJson(String s) {

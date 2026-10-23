@@ -26,7 +26,7 @@ import org.jetbrains.annotations.Nullable;
  */
 public class ConfigModule {
 
-    private static final int CURRENT_CONFIG_VERSION = 2;
+    private static final int CURRENT_CONFIG_VERSION = 3;
     private static final java.util.regex.Pattern ENV_PATTERN =
             java.util.regex.Pattern.compile("\\$\\{env:([A-Za-z_][A-Za-z0-9_]*)}");
 
@@ -240,16 +240,19 @@ public class ConfigModule {
 
     /**
      * Add keys introduced by newer versions without overwriting any user value.
-     * Version 1 is the original layout; version 2 adds v7 security/scan/audit
-     * sections. Comments in the user's file are preserved because we only write
+     * Version 1 is the original layout; versions 2-3 add v7
+     * security/scan/audit/plugin-identity sections. Comments in the user's file are preserved because we only write
      * when new keys actually have to be added.
      */
     public void migrate() {
         if (configVersion >= CURRENT_CONFIG_VERSION) return;
         boolean changed = false;
         if (bundledDefaults != null && !bundledDefaults.getKeys(true).isEmpty()) {
+            // config.contains() also consults the defaults, so use a raw copy of
+            // the user's file to decide what is actually missing on disk.
+            YamlConfiguration raw = YamlConfiguration.loadConfiguration(configFile);
             for (String key : bundledDefaults.getKeys(true)) {
-                if (bundledDefaults.isConfigurationSection(key) || config.contains(key)) continue;
+                if (bundledDefaults.isConfigurationSection(key) || raw.contains(key)) continue;
                 config.set(key, bundledDefaults.get(key));
                 changed = true;
             }

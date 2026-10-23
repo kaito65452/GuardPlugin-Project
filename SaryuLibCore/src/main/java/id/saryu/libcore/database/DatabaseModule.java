@@ -28,6 +28,20 @@ import org.jetbrains.annotations.NotNull;
  */
 public class DatabaseModule {
 
+    static {
+        // The fat jar can only keep one META-INF/services/java.sql.Driver file
+        // (duplicate resources are excluded), so register every bundled driver
+        // explicitly. Class.forName only loads a fixed, trusted driver name.
+        for (String driver : new String[]{
+                "org.sqlite.JDBC", "org.h2.Driver", "com.mysql.cj.jdbc.Driver"}) {
+            try {
+                Class.forName(driver);
+            } catch (Throwable ignored) {
+                // Driver not bundled in a custom build; other types still work.
+            }
+        }
+    }
+
     public enum Type { MYSQL, H2, SQLITE }
 
     private final SaryuLib plugin;

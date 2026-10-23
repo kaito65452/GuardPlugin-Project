@@ -25,10 +25,13 @@ public class StringSanitizer {
         // Remove BOM, zero-width, bidi controls and control chars.
         s = ZERO_WIDTH.matcher(s).replaceAll("");
         s = CONTROL.matcher(s).replaceAll("");
-        // Strip leading slashes (including repeated ones after NFKC).
-        s = s.replaceFirst("^/+", "");
+        // Strip leading spaces/slashes in any order (e.g. "  / / op").
+        s = s.trim();
+        while (s.startsWith("/")) {
+            s = s.substring(1).trim();
+        }
         // Collapse internal whitespace.
-        s = s.trim().replaceAll("\\s+", " ");
+        s = s.replaceAll("\\s+", " ");
         return s.toLowerCase(java.util.Locale.ROOT);
     }
 
