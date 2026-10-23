@@ -1,8 +1,12 @@
 package id.saryu.antichatmanager.command;
 
 import id.saryu.antichatmanager.AntiChatManager;
+import id.saryu.antichatmanager.audit.PermissionAudit;
 import id.saryu.antichatmanager.blacklist.BlacklistManager;
+import id.saryu.antichatmanager.conflict.ConflictDetector;
+import id.saryu.antichatmanager.identity.PluginIdentityService;
 import id.saryu.antichatmanager.scan.AutoScanner;
+import id.saryu.antichatmanager.security.SecurityAudit;
 import id.saryu.antichatmanager.storage.Storage;
 import id.saryu.libcore.command.CommandFramework;
 import id.saryu.libcore.util.StringSanitizer;
@@ -24,9 +28,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The /acm command. Subcommands are registered into SaryuLibCore's
@@ -55,6 +61,10 @@ public class ACMCommand {
         root.register(new InfoSub());
         root.register(new ScanSub());
         root.register(new BlacklistSub());
+        root.register(new PluginsSub(plugin));
+        root.register(new ConflictsSub(plugin));
+        root.register(new AuditSub(plugin));
+        root.register(new SecuritySub(plugin));
         root.register(new HistorySub());
         root.register(new ViolationsSub());
         root.register(new TemplateSub());
@@ -210,15 +220,29 @@ public class ACMCommand {
         @Override
         public void execute(CommandSender sender, Command cmd, String label, String[] args) {
             sendRaw(sender, "help.header", "&b=== AntiChatManager Commands ===");
+            Set<String> shown = new HashSet<>();
             for (String row : plugin.getLang().messageList("help.rows")) {
                 // Sub-command hints themselves contain '|' (e.g. <id|command>),
                 // so the description follows the last separator.
                 int split = row.lastIndexOf('|');
                 if (split < 0) continue;
+                String sub = row.substring(0, split).trim();
+                shown.add(sub.split("\\s+", 2)[0].toLowerCase(Locale.ROOT));
                 sendRaw(sender, "help.line", "&7/{cmd} &f{sub} &8- &7{desc}",
                         "cmd", label,
-                        "sub", row.substring(0, split),
+                        "sub", sub,
                         "desc", row.substring(split + 1));
+            }
+            // A stale on-disk language file must never hide a registered command.
+            CommandFramework.Root root = plugin.getLib().getCommandFramework().getRoot("acm");
+            if (root != null) {
+                for (CommandFramework.SubCommand sub : root.getSubCommands().values()) {
+                    String name = sub.name().toLowerCase(Locale.ROOT);
+                    if (!shown.add(name)) continue;
+                    String desc = plugin.getLang().message("help.sub." + name, sub.description());
+                    sendRaw(sender, "help.line", "&7/{cmd} &f{sub} &8- &7{desc}",
+                            "cmd", label, "sub", sub.name(), "desc", desc);
+                }
             }
         }
     }
@@ -234,13 +258,7 @@ public class ACMCommand {
 
         @Override
         public void execute(CommandSender sender, Command cmd, String label, String[] args) {
-            plugin.getConfigModule().reload();
-            plugin.getLang().reload();
-            plugin.getLib().getDatabaseModule().reconfigure(plugin.getConfigModule());
-            plugin.getAlertManager().reloadConfig();
-            plugin.getPunishmentTracker().reloadConfig();
-            plugin.getAutoScanner().reloadConfig();
-            plugin.getRateLimit().reloadConfig();
+            plugin.reloadAll();
             send(sender, "reload", "&aAntiChatManager configuration reloaded.");
         }
     }
@@ -289,6 +307,11 @@ public class ACMCommand {
                             .format(new Date(plugin.getAutoScanner().getLastScan())));
             sendRaw(sender, "info.provider", "&7Ban provider: &f{provider}",
                     "provider", plugin.getLib().getPunishmentService().getProviderType());
+            String jarHash = plugin.getSecurityAudit().selfHash();
+            if (jarHash != null) {
+                sendRaw(sender, "info.jarhash", "&7Plugin JAR SHA-256: &f{hash}",
+                        "hash", jarHash);
+            }
         }
     }
 
@@ -299,16 +322,26 @@ public class ACMCommand {
     private final class ScanSub extends Base {
         @Override public @NotNull String name() { return "scan"; }
         @Override public String description() { return "Run or inspect the auto-scan"; }
-        @Override public String usage() { return "/acm scan [report|sources]"; }
+        @Override public String usage() { return "/acm scan [report|sources|identify]"; }
 
         @Override
         public @NotNull List<String> tabComplete(@NotNull CommandSender sender, String[] args) {
-            if (args.length == 1) return filter(List.of("report", "sources"), args[0]);
+            if (args.length == 1) return filter(List.of("report", "sources", "identify"), args[0]);
             return List.of();
         }
 
         @Override
         public void execute(CommandSender sender, Command cmd, String label, String[] args) {
+            if (args.length > 0 && args[0].equalsIgnoreCase("identify")) {
+                if (plugin.getPluginIdentityService() == null) {
+                    send(sender, "messages.internal-error", "%prefix%&cAn internal error occurred. Check the console.");
+                    return;
+                }
+                plugin.getPluginIdentityService().reloadConfig();
+                plugin.getPluginIdentityService().identifyNow();
+                send(sender, "plugins.identify.done", "&aPlugin identification complete.");
+                return;
+            }
             if (args.length > 0 && args[0].equalsIgnoreCase("report")) {
                 List<AutoScanner.ScanResult> report = plugin.getAutoScanner().getLastReport();
                 if (report.isEmpty()) {
@@ -406,6 +439,9 @@ public class ACMCommand {
                     }
                     return filter(commands, args[1]);
                 }
+            }
+            if (args.length == 3 && args[0].equalsIgnoreCase("whitelist")) {
+                return filter(plugin.getLib().getPermissionModule().getLoadedGroupNames(), args[2]);
             }
             if (args.length == 3 && args[0].equalsIgnoreCase("add")) {
                 List<String> modes = new ArrayList<>();
@@ -512,6 +548,10 @@ public class ACMCommand {
                     entry.permission == null ? "-" : entry.permission);
             line(sender, "blacklist.field.reason", "reason",
                     entry.reason == null ? "-" : entry.reason);
+            line(sender, "blacklist.field.world", "world",
+                    entry.world == null || entry.world.isBlank() ? "*" : entry.world);
+            line(sender, "blacklist.field.allowed_groups", "allowed groups",
+                    entry.allowedGroups.isEmpty() ? "-" : String.join(", ", entry.allowedGroups));
             line(sender, "blacklist.field.added_by", "added_by",
                     entry.addedBy == null ? "-" : entry.addedBy);
             line(sender, "blacklist.field.added_at", "added_at", entry.addedAt == 0 ? "-"
@@ -589,10 +629,25 @@ public class ACMCommand {
 
         private void whitelist(CommandSender sender, String[] args) {
             if (args.length < 2) {
-                send(sender, "blacklist.whitelist.usage", "&7Usage: &f/acm blacklist whitelist <command>");
+                send(sender, "blacklist.whitelist.usage",
+                        "&7Usage: &f/acm blacklist whitelist <command> [group]");
                 return;
             }
             String command = normalizeInput(args[1]);
+            if (args.length >= 3) {
+                String group = args[2];
+                if (!plugin.getBlacklist().addAllowedGroup(command, group)) {
+                    send(sender, "blacklist.notfound", "&cNo blacklist entry found for &7{command}.",
+                            "command", command);
+                    return;
+                }
+                plugin.getConflictDetector().whitelistGroup(command, group);
+                send(sender, "blacklist.whitelist.group",
+                        "&aGroup &f{group} &ais now allowed to use &f{command}&a. "
+                        + "The entry stays blacklisted for other groups.",
+                        "group", group, "command", command);
+                return;
+            }
             int removed = plugin.getBlacklist().removeByCommand(command, BlacklistManager.Source.PLUGIN_SCAN)
                     + plugin.getBlacklist().removeByCommand(command, BlacklistManager.Source.LUCKPERMS_SCAN);
             if (removed == 0) {
@@ -930,9 +985,14 @@ public class ACMCommand {
         public void execute(CommandSender sender, Command cmd, String label, String[] args) {
             String fileName = args.length > 0 ? args[0] : "blacklist-export.yml";
             if (!fileName.endsWith(".yml")) fileName += ".yml";
+            File resolved = safeDataFile(fileName);
+            if (resolved == null) {
+                send(sender, "export.failed", "&cExport failed: {error}", "error", "unsafe path");
+                return;
+            }
             final String finalName = fileName;
             plugin.getLib().getSchedulerModule().runAsync(() -> {
-                File file = new File(plugin.getDataFolder(), finalName);
+                File file = resolved;
                 YamlConfiguration out = new YamlConfiguration();
                 List<Map<String, Object>> list = new ArrayList<>();
                 for (BlacklistManager.Entry e : plugin.getBlacklist().getSortedEntries()) {
@@ -976,14 +1036,36 @@ public class ACMCommand {
                 return;
             }
             String fileName = args[0].endsWith(".yml") ? args[0] : args[0] + ".yml";
-            File file = new File(plugin.getDataFolder(), fileName);
-            if (!file.exists()) {
+            File file = safeDataFile(fileName);
+            if (file == null) {
                 send(sender, "import.notfound", "&cFile not found: &f{file}", "file", fileName);
                 return;
             }
+            if (!file.exists() || !file.isFile()) {
+                send(sender, "import.notfound", "&cFile not found: &f{file}", "file", fileName);
+                return;
+            }
+            if (file.length() > 1024 * 1024) {
+                send(sender, "import.failed", "&cImport failed: {error}", "error", "file too large");
+                return;
+            }
             plugin.getLib().getSchedulerModule().runAsync(() -> {
-                YamlConfiguration in = YamlConfiguration.loadConfiguration(file);
+                YamlConfiguration in;
+                try {
+                    String raw = java.nio.file.Files.readString(file.toPath(), java.nio.charset.StandardCharsets.UTF_8);
+                    if (unsafeYaml(raw)) {
+                        throw new IllegalArgumentException("unsafe YAML structure");
+                    }
+                    in = new YamlConfiguration();
+                    in.loadFromString(raw);
+                } catch (Exception ex) {
+                    plugin.getLib().getSchedulerModule().runSync(() ->
+                            send(sender, "import.failed", "&cImport failed: {error}",
+                                    "error", ex.getMessage() == null ? "invalid YAML" : ex.getMessage()));
+                    return;
+                }
                 List<Map<?, ?>> list = in.getMapList("entries");
+                if (list.size() > 5000) list = list.subList(0, 5000);
                 int added = 0;
                 int skipped = 0;
                 for (Map<?, ?> map : list) {
@@ -1003,6 +1085,10 @@ public class ACMCommand {
                                 String.valueOf(modeObj == null ? "EXACT" : modeObj).toUpperCase(Locale.ROOT));
                     } catch (IllegalArgumentException ex) {
                         e.mode = BlacklistManager.MatchMode.EXACT;
+                    }
+                    if (e.mode == BlacklistManager.MatchMode.REGEX && !plugin.getBlacklist().isSafeRegex(command)) {
+                        skipped++;
+                        continue;
                     }
                     e.source = BlacklistManager.Source.IMPORT;
                     e.pluginName = map.get("plugin") != null ? String.valueOf(map.get("plugin")) : null;
@@ -1030,6 +1116,40 @@ public class ACMCommand {
 
     private String normalizeInput(String input) {
         return StringSanitizer.normalize(input);
+    }
+
+    /**
+     * Resolve an import/export file strictly inside this plugin's data folder.
+     * Rejects absolute paths, traversal, NUL bytes, symlinks, and unusual names.
+     */
+    private @Nullable File safeDataFile(@NotNull String name) {
+        if (name.isBlank() || name.indexOf('\0') >= 0 || name.indexOf('\\') >= 0) return null;
+        try {
+            java.nio.file.Path base = plugin.getDataFolder().getCanonicalFile().toPath();
+            java.nio.file.Path target = base.resolve(name).normalize();
+            if (!target.startsWith(base) || target.equals(base)) return null;
+            File file = target.toFile();
+            if (java.nio.file.Files.isSymbolicLink(file.toPath())) return null;
+            return file;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Cheap YAML-bomb / unsafe-tag guard before SnakeYAML sees the input. */
+    private boolean unsafeYaml(@NotNull String raw) {
+        if (raw.length() > 1024 * 1024) return true;
+        if (raw.contains("!!") || raw.contains("!java") || raw.contains("!javax")) return true;
+        int aliases = 0;
+        int depth = 0;
+        for (String line : raw.split("\\R")) {
+            String t = line.trim();
+            if (t.startsWith("&") || t.startsWith("*")) aliases++;
+            if (aliases > 256) return true;
+            depth += t.startsWith("-") ? 1 : 0;
+            if (depth > 5000) return true;
+        }
+        return false;
     }
 
     private String displayId(int id) {

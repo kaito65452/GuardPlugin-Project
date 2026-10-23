@@ -3,7 +3,7 @@
 
 # Config schema version (auto-migrated by SaryuLibCore).
 config:
-  version: 1
+  version: 4
 
 # Language file code (eng_US | id_ID). Fallback to eng_US if missing keys.
 language: eng_US
@@ -15,6 +15,32 @@ prefix: "&7[&bACM&7]"
 
 # Timezone used in alerts and logs: WIB | WITA | WIT | UTC
 timezone: WIB
+
+# --- Sensitive plugins (manual mapping) ---
+# Every command/alias registered by these plugins is mapped and blacklisted
+# with source manual-scan:<plugin>. Missing plugins are retried on enable.
+# Names are case-insensitive and are never evaluated as regex.
+plugin-manual-scan:
+  - "WorldEdit"
+  - "PlugMan"
+
+# --- Command / subcommand rules (longest-prefix literal token match) ---
+# "label [sub1] [sub2] ..." where * matches exactly one argument.
+# mode: block | alert-only | allow. Admin allow/manual rules win over scans.
+commands:
+  # Explicitly allow this read-only LuckPerms query even if a broad scan rule
+  # (e.g. "lp") exists. Rules are literal tokens; "*" matches one argument.
+  "lp info":
+    mode: allow
+#  "worldguard reload": { mode: block }
+#  "lp user * permission set": { mode: block }
+
+# --- Optional WorldEdit / FAWE / WorldGuard integration ---
+integration:
+  enabled: true
+  # Recommendations are never applied automatically; use /acm integration apply.
+  compat-mode: true
+  read-plugin-configs: true
 
 # --- Blacklist ---
 blacklist:
@@ -117,6 +143,53 @@ database:
   # Days to retain violation/scan history (0 = keep forever).
   retention-days: 30
 
+# --- Auto-blacklist (plugin identity via Modrinth/Hangar) ---
+plugin-identity:
+  enabled: true
+  modrinth:
+    enabled: true
+    api-url: https://api.modrinth.com/v2
+    user-agent: "Saryu/AntiChatManager/{VERSION} (contact-admin)"
+    cache-ttl: 7d
+    use-categories: true
+    hangar-fallback: true
+    send-only-hashes: true
+  min-confidence: 70
+
+# --- LuckPerms conflict detection ---
+conflict-detection:
+  enabled: true
+  check-users: false
+  staff-min-weight: 50
+  notify-staff-on-join: true
+  reminder-interval: 6h
+  dangerous-commands: [op, deop, stop, reload, execute, lp, luckperms, plugman, whitelist, ban, sudo, give, gamemode, fill, setblock]
+  ignore: []
+  allowed-groups: {}
+
+# --- Permission bypass/audit ---
+audit:
+  enabled: true
+  scan-on-start: true
+  scan-on-luckperms-change: true
+  # Also audit individual users (not only groups). Can be slow on large LuckPerms databases.
+  check-users: false
+  notify-interval: 6h
+  # Groups considered staff. A staff group holding risky plugin nodes is
+  # reported as HIGH; non-staff holders are CRITICAL.
+  staff-groups: []
+  ignore-groups: []
+  ignore-users: []
+  ignore-permissions: []
+  min-risk-to-notify: MEDIUM
+  # Additional risky permission nodes for the read-only plugin audit.
+  plugin-permissions:
+    - "worldedit.*"
+    - "worldguard.*"
+    - "worldguard.region.bypass.*"
+    - "fawe.*"
+  auto-fix: false
+
 # --- Security ---
 security:
   # Maximum command length before rejection (also blacklist.max-command-length).
@@ -130,6 +203,10 @@ security:
   block-control-chars: true
   block-raw-section: true
   block-zero-width: true
+  alert-cooldown-ms: 2000
+  alert-per-minute: 30
+  # Warn once when a plugin JAR changes compared with the stored baseline.
+  jar-baseline: true
 
 # --- Webhook (Discord) ---
 webhook:

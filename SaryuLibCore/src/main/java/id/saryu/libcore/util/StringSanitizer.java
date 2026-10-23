@@ -16,14 +16,23 @@ public class StringSanitizer {
     public static String normalize(String input) {
         if (input == null) return "";
         String s = input;
-        // Remove BOM and zero-width / control chars.
+        // NFKC folds full-width lookalikes and compatibility characters before
+        // matching. It also turns full-width '/' into a normal slash.
+        try {
+            s = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFKC);
+        } catch (Exception ignored) {
+        }
+        // Remove BOM, zero-width, bidi controls and control chars.
         s = ZERO_WIDTH.matcher(s).replaceAll("");
         s = CONTROL.matcher(s).replaceAll("");
-        // Strip leading slashes.
-        s = s.replaceFirst("^/+", "");
+        // Strip leading spaces/slashes in any order (e.g. "  / / op").
+        s = s.trim();
+        while (s.startsWith("/")) {
+            s = s.substring(1).trim();
+        }
         // Collapse internal whitespace.
-        s = s.trim().replaceAll("\\s+", " ");
-        return s.toLowerCase();
+        s = s.replaceAll("\\s+", " ");
+        return s.toLowerCase(java.util.Locale.ROOT);
     }
 
     public static String stripSlash(String input) {

@@ -13,6 +13,7 @@ placeholderapi = "2.11.5"
 floodgate = "4.0.1-beta.1"
 packetevents = "2.11.2"
 shadow = "8.1.1"
+junit = "5.11.4"
 
 [libraries]
 # --- Paper / Adventure ---
@@ -32,6 +33,10 @@ luckperms-api = { group = "net.luckperms", name = "api", version.ref = "luckperm
 placeholderapi = { group = "me.clip", name = "placeholderapi", version.ref = "placeholderapi" }
 floodgate-api = { group = "org.geysermc.floodgate", name = "floodgate-api", version.ref = "floodgate" }
 packetevents-api = { group = "com.github.retrooper", name = "packetevents-api", version.ref = "packetevents" }
+
+# --- Tests ---
+junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junit" }
+junit-platform-launcher = { group = "org.junit.platform", name = "junit-platform-launcher", version = "1.11.4" }
 
 [plugins]
 shadow = { id = "com.github.johnrengelman.shadow", version.ref = "shadow" }

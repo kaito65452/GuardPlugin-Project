@@ -44,6 +44,10 @@ allprojects {
             name = "codemc"
             setUrl("https://repo.codemc.io/repository/maven-public/")
         }
+        maven {
+            name = "placeholderapi"
+            setUrl("https://repo.extendedclip.com/content/repositories/placeholderapi/")
+        }
     }
 }
 
@@ -51,5 +55,50 @@ tasks.register("cleanAll") {
     dependsOn(subprojects.map { it.tasks.named("clean") })
     doLast {
         println("Cleaned all subprojects.")
+    }
+}
+
+/*
+ * Static guard for capabilities that must never appear in plugin code.
+ * CI runs this through `check`, so a violation fails the build.
+ */
+val scanForbiddenApis = tasks.register("scanForbiddenApis") {
+    group = "verification"
+    description = "Fail the build if dangerous JVM APIs appear in plugin sources."
+    val sources = files(
+        fileTree("AntiChatManager/src/main/java") { include("**/*.java") },
+        fileTree("SaryuLibCore/src/main/java") { include("**/*.java") }
+    )
+    inputs.files(sources)
+    doLast {
+        val forbidden = listOf(
+            Regex("""\bRuntime\s*\.\s*getRuntime\s*\(\s*\)\s*\.\s*exec\s*\("""),
+            Regex("""\bnew\s+ProcessBuilder\s*\("""),
+            Regex("""\bObjectInputStream\b"""),
+            Regex("""\bURLClassLoader\b"""),
+            Regex("""\bdefineClass\s*\("""),
+            Regex("""\bScriptEngine(Manager)?\b"""),
+            Regex("""\bsun\s*\.\s*misc\s*\.\s*Unsafe\b"""),
+            Regex("""\bSystem\s*\.\s*load(Library)?\s*\(""")
+        )
+        val violations = mutableListOf<String>()
+        sources.files.forEach { file ->
+            file.readLines().forEachIndexed { index, line ->
+                forbidden.forEach { pattern ->
+                    if (pattern.containsMatchIn(line)) {
+                        violations += "${file.relativeTo(rootDir)}:${index + 1}: ${line.trim()}"
+                    }
+                }
+            }
+        }
+        if (violations.isNotEmpty()) {
+            throw GradleException("Forbidden API usage detected:\n" + violations.joinToString("\n"))
+        }
+    }
+}
+
+subprojects {
+    tasks.matching { it.name == "check" }.configureEach {
+        dependsOn(scanForbiddenApis)
     }
 }

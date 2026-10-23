@@ -1,54 +1,9 @@
-# === Gradle ===
 .gradle/
 build/
-**/build/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/**/build/
-
-# === Hasil build (JAR) ===
+*.class
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
-
-# === IDE ===
 .idea/
 *.iml
-*.ipr
-*.iws
-.vscode/
-.classpath
-.project
-.settings/
-bin/
-out/
-.fleet/
-
-# === Server tes lokal (run-paper / uji manual) ===
 run/
-**/run/
-server/
-test-server/
-
-# === Catatan prompt / spesifikasi lokal ===
-prompt-*.md
-
-# === Data & rahasia (JANGAN di-commit) ===
-.env
-*.env
-secrets.*
-**/plugins/
-*.db
-*.sqlite
-*.sqlite3
-*.mv.db
-*.trace.db
-logs/
-*.log
-crash-reports/
-hs_err_pid*
-
-# === OS ===
-.DS_Store
-Thumbs.db
-desktop.ini
-*~
-*.swp
+local.properties

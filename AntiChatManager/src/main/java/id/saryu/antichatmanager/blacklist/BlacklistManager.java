@@ -49,6 +49,8 @@ public class BlacklistManager {
         public long addedAt;
         @Nullable public String world;
         @Nullable public String groupName;
+        /** LuckPerms groups allowed to run this command without a full bypass. */
+        @NotNull public java.util.List<String> allowedGroups = new java.util.ArrayList<>();
         public boolean enabled = true;
         public Pattern regexPattern;
 
@@ -57,13 +59,29 @@ public class BlacklistManager {
         public void compileRegex() {
             if (mode == MatchMode.REGEX) {
                 try {
-                    regexPattern = Pattern.compile(command, Pattern.CASE_INSENSITIVE);
+                    regexPattern = isSafeRegex(command)
+                            ? Pattern.compile(command, Pattern.CASE_INSENSITIVE) : null;
                 } catch (Exception e) {
                     regexPattern = null;
                 }
             } else {
                 regexPattern = null;
             }
+        }
+
+        /**
+         * Rejects common catastrophic-backtracking shapes and unsafe constructs.
+         * This is intentionally conservative: blacklist regexes are short and
+         * should never need nested quantifiers or backreferences.
+         */
+        public static boolean isSafeRegex(@Nullable String regex) {
+            if (regex == null || regex.isBlank() || regex.length() > 128) return false;
+            if (regex.matches(".*\\\\([1-9][0-9]*).*")) return false;
+            if (regex.matches(".*\\([^)]*[+*][^)]*\\)[+*].*")) return false;
+            if (regex.matches(".*\\([^)]*\\|[^)]*\\)[+*].*")) return false;
+            if (regex.contains(".*.*") || regex.contains(".+.+")) return false;
+            if (regex.contains("(?{")) return false;
+            return true;
         }
     }
 
@@ -207,6 +225,22 @@ public class BlacklistManager {
         return entriesById.get(id);
     }
 
+    /**
+     * Allow one LuckPerms group to execute a blacklisted command without giving
+     * that group the global bypass permission. Additive: the entry stays active
+     * for every other group.
+     */
+    public boolean addAllowedGroup(@NotNull String command, @NotNull String group) {
+        Entry entry = findEntry(command);
+        if (entry == null || group.isBlank()) return false;
+        String normalized = group.trim().toLowerCase(Locale.ROOT);
+        if (!entry.allowedGroups.contains(normalized)) {
+            entry.allowedGroups.add(normalized);
+            plugin.getStorage().updateAllowedGroups(entry.id, entry.allowedGroups);
+        }
+        return true;
+    }
+
     public @Nullable Entry findEntry(@NotNull String command) {
         String norm = StringSanitizer.normalize(command);
         String only = commandOnly(norm);
@@ -227,6 +261,7 @@ public class BlacklistManager {
     public @Nullable String match(@NotNull String rawCommand) {
         String norm = StringSanitizer.normalize(rawCommand);
         if (norm.isEmpty()) return null;
+        if (norm.length() > 256) return null;
 
         String cached = matchCache.get(norm);
         if (cached != null) return cached.isEmpty() ? null : cached;
@@ -310,6 +345,40 @@ public class BlacklistManager {
         int space = norm.indexOf(' ');
         String first = space >= 0 ? norm.substring(0, space) : norm;
         return stripNamespace(first);
+    }
+
+    public boolean isSafeRegex(@Nullable String regex) {
+        return Entry.isSafeRegex(regex);
+    }
+
+    /**
+     * Per-player exceptions: world restriction, single-group restriction, and
+     * conflict-detection allowed-groups. Returning true means "this player is
+     * allowed to run the matched entry" (so the caller should not cancel).
+     */
+    public boolean isAllowedFor(@NotNull org.bukkit.entity.Player player, @NotNull String matchedCommand) {
+        Entry entry = findEntry(matchedCommand);
+        if (entry == null) return false;
+        if (entry.world != null && !entry.world.isBlank()
+                && !entry.world.equalsIgnoreCase(player.getWorld().getName())) {
+            return true;
+        }
+        if (entry.groupName != null && !entry.groupName.isBlank()
+                && !player.hasPermission("group." + entry.groupName)) {
+            return true;
+        }
+        for (String group : entry.allowedGroups) {
+            if (group != null && !group.isBlank() && player.hasPermission("group." + group)) {
+                return true;
+            }
+        }
+        try {
+            if (plugin.getConflictDetector() != null
+                    && plugin.getConflictDetector().isAllowedForPlayer(entry.command, player)) {
+                return true;
+            }
+        } catch (Throwable ignored) {}
+        return false;
     }
 
     private boolean wildcardMatch(@NotNull String pattern, @NotNull String input) {

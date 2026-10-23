@@ -2,7 +2,7 @@
 # Do not edit by hand unless you know what you are doing; use /saryulib reload.
 
 config:
-  version: 1
+  version: 3
 
 database:
   # MYSQL | H2 | SQLITE

@@ -60,28 +60,58 @@ public class IntegrationModule {
      */
     public void sendWebhook(@NotNull String url, @NotNull String content) {
         if (url == null || url.isEmpty()) return;
-        plugin.getSchedulerModule().runAsync(() -> {
-            try {
-                java.net.HttpURLConnection con = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
-                con.setRequestMethod("POST");
-                con.setRequestProperty("Content-Type", "application/json");
-                con.setDoOutput(true);
-                String json = "{\"content\":\"" + escapeJson(content) + "\"}";
-                byte[] b = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-                con.setFixedLengthStreamingMode(b.length);
-                con.getOutputStream().write(b);
-                int code = con.getResponseCode();
-                if (code >= 400) {
-                    plugin.getLogger().warning("Discord webhook returned " + code);
-                }
-                con.disconnect();
-            } catch (Exception e) {
-                plugin.getLogger().warning("Discord webhook failed: " + e.getMessage());
+        try {
+            java.net.URI uri = java.net.URI.create(url);
+            String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(java.util.Locale.ROOT);
+            if (!"https".equalsIgnoreCase(uri.getScheme())
+                    || !(host.equals("discord.com") || host.equals("discordapp.com")
+                    || host.endsWith(".discord.com") || host.endsWith(".discordapp.com"))) {
+                plugin.getLogger().warning("Webhook rejected: only HTTPS Discord hosts are allowed.");
+                return;
             }
-        });
+            String json = "{\"content\":\"" + escapeJson(escapeMarkdown(content))
+                    + "\",\"allowed_mentions\":{\"parse\":[]}}";
+            plugin.getRepositoryClient().post(url, "Saryu-AntiChatManager", json)
+                    .exceptionally(e -> {
+                        plugin.getLogger().warning("Discord webhook failed: " + e.getMessage());
+                        return null;
+                    });
+        } catch (Exception e) {
+            plugin.getLogger().warning("Webhook rejected: " + e.getMessage());
+        }
+    }
+
+    /** Prevent player-controlled text from injecting Discord markdown/mentions. */
+    private static String escapeMarkdown(String s) {
+        StringBuilder out = new StringBuilder(s.length() + 16);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '\\' || c == '*' || c == '_' || c == '~' || c == '`'
+                    || c == '>' || c == '|' || c == '[' || c == ']'
+                    || c == '(' || c == ')') {
+                out.append('\\');
+            }
+            out.append(c);
+        }
+        return out.toString();
     }
 
     private static String escapeJson(String s) {
-        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
+        StringBuilder out = new StringBuilder(s.length() + 16);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '\\' -> out.append("\\\\");
+                case '"' -> out.append("\\\"");
+                case '\n' -> out.append("\\n");
+                case '\r' -> out.append("\\r");
+                case '\t' -> out.append("\\t");
+                default -> {
+                    if (c < 0x20) out.append(String.format("\\u%04x", (int) c));
+                    else out.append(c);
+                }
+            }
+        }
+        return out.toString();
     }
 }
