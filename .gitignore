@@ -1,8 +1,51 @@
-# Ignore Gradle project-specific cache directory
-.gradle
+# === Gradle ===
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/**/build/
 
-# Ignore Gradle build output directory
-build
+# === Hasil build (JAR) ===
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
 
-# Ignore Kotlin plugin data
-.kotlin
+# === IDE ===
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+bin/
+out/
+.fleet/
+
+# === Server tes lokal (run-paper / uji manual) ===
+run/
+**/run/
+server/
+test-server/
+
+# === Data & rahasia (JANGAN di-commit) ===
+.env
+*.env
+secrets.*
+**/plugins/
+*.db
+*.sqlite
+*.sqlite3
+*.mv.db
+*.trace.db
+logs/
+*.log
+crash-reports/
+hs_err_pid*
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+*.swp
