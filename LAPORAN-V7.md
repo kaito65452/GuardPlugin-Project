@@ -158,6 +158,98 @@ Status: `SUDAH ADA` = sudah berfungsi sebelum perubahan, `SEBAGIAN` = baru sebag
 
 ---
 
+## 5b. Sesi Lanjutan — Subcommand, Integrasi WE/FAWE/WG, dan Manual Scan
+
+Bagian ini menambahkan fitur tanpa mengubah perilaku lama. Semua perubahan bersifat
+aditif; config naik ke **v4**, schema database naik ke **v4**, dan build tetap Java 21.
+
+### 5b.1 Audit sebelum vs sesudah (fitur sesi ini)
+
+| Fitur | Sebelum | Sesudah | Bukti |
+|---|---|---|---|
+| Aturan subcommand literal (`label sub1 sub2`, `*` = satu argumen) | BELUM | SUDAH ADA | `commands:` config, `BlacklistManager.tokenMatch`, unit runtime |
+| Aksi per aturan `block` / `alert-only` / `allow` | BELUM | SUDAH ADA | `Action`, `MatchResult`, listener/packet |
+| Variabel alert `{SUBCOMMAND}` / `{FULLCOMMAND}` | BELUM | SUDAH ADA | `AlertManager`, sanitasi + truncation |
+| Filter tab-completion untuk subcommand diblokir | BELUM | SUDAH ADA | `PlayerListener.onTabComplete` |
+| WorldEdit/FAWE/WorldGuard terdeteksi dan dipetakan | BELUM | SUDAH ADA | `PluginIntegrationService`, runtime WE 7.4.6 + WG 7.0.14 |
+| Rekomendasi opt-in dan `/acm integration apply` | BELUM | SUDAH ADA | `commands:` ditulis hanya setelah konfirmasi admin |
+| Baca config plugin sensitif (read-only) | BELUM | SUDAH ADA | warning `max-radius: -1`, file plugin lain tidak ditulis |
+| Audit LuckPerms untuk `worldedit.*`, `worldguard.*`, `worldguard.region.bypass.*`, `fawe.*` | BELUM | SUDAH ADA | `PermissionAudit`, origin group/weight/primary + penanda staff |
+| `plugin-manual-scan` memetakan command/alias/permission/listener | BELUM | SUDAH ADA | CommandMap + `PluginIdentifiableCommand` + `HandlerList` |
+| Source `manual-scan:<plugin>` dan cache per plugin | BELUM | SUDAH ADA | DB `acm_blacklist.source`, `/acm scan list` |
+| Nonaktifkan baris manual-scan saat plugin disable/dilepas | BELUM | SUDAH ADA | PluginDisableEvent + rescan; runtime PlugManX |
+| `/acm scan <plugin>` dan `/acm scan list` | BELUM | SUDAH ADA | `scanPluginAsync`; plugin tak terdaftar hanya pratinjau |
+| Permission baru integration/subcmd | BELUM | SUDAH ADA | `plugin.yml`, `CommandFramework.sendUsage()` terfilter |
+| Migrasi config v3 → v4 dan schema v3 → v4 | BELUM | SUDAH ADA | `ConfigModule`, `DatabaseModule.applySchemaV4` |
+| Kompatibilitas `/acm` lama, config lama, source lama | SUDAH ADA | SUDAH ADA | Root command tetap; baris lama `action=BLOCK` |
+
+### 5b.2 File baru
+
+| File | Tujuan |
+|---|---|
+| `AntiChatManager/integration/PluginIntegrationService.java` | Deteksi WE/FAWE/WG, pemetaan command/permission/listener, rekomendasi opt-in, manual scan async, warning config read-only |
+| `AntiChatManager/command/ACMIntegrationSubcommands.java` | `/acm integration` dan `/acm subcmd` |
+
+### 5b.3 File lama yang diubah dan alasannya
+
+| File | Alasan |
+|---|---|
+| `blacklist/BlacklistManager.java` | `Action`/`MatchResult`, canonicalization, token matcher, prioritas source, config rules, cache hasil, manual-scan upsert/disable |
+| `listener/PlayerListener.java` | Aksi block/alert-only/allow, filter tab, alert-only, penanganan formatting/command panjang |
+| `packet/PacketInterceptor.java` | Aksi yang sama di jalur packet tanpa mengubah fallback Bukkit |
+| `command/CommandHandler.java` | Alert sukses untuk alert-only; event tetap tidak membuka command yang sudah diblokir |
+| `command/ACMCommand.java` | `/acm scan list|<plugin>`, action pada list/info/export/import, join argumen multi-token untuk check/info/remove |
+| `alert/AlertManager.java` | Placeholder `{SUBCOMMAND}`/`{FULLCOMMAND}`, source label asli |
+| `audit/PermissionAudit.java` | Node sensitif plugin, deteksi wildcard, penanda staff/non-staff |
+| `storage/Storage.java` | Persistensi `action`, label `manual-scan:<plugin>`, upsert/enable/disable |
+| `config.yml` | `commands:`, `plugin-manual-scan:`, `integration:`, `audit.plugin-permissions` |
+| `languages/eng_US.yml`, `languages/id_ID.yml` | Semua pesan scan/integration/subcmd/action |
+| `plugin.yml` | Softdepend WE/FAWE/WG, permission integration/subcmd, root command tanpa permission |
+| `SaryuLibCore/DatabaseModule.java` | `applySchemaV4` (`acm_blacklist.action`) |
+| `SaryuLibCore/ConfigModule.java` | Config version 4 + migrasi aditif |
+| `SaryuLibCore/CommandFramework.java` | Usage hanya menampilkan subcommand yang boleh dijalankan pengirim |
+
+### 5b.4 Verifikasi runtime
+
+- Paper 1.21.8, Java 25, bytecode Java 21.
+- WorldEdit 7.4.6 (163 command label) dan WorldGuard 7.0.14 (17 command label) terdeteksi.
+- `//SET stone` → `set` dari `manual-scan:WorldEdit`.
+- `WG  reload` dan `worldguard:wg reload` → `wg reload` (CONFIG).
+- `rg flag spawn pvp allow` → `rg flag` (CONFIG).
+- `lp info` → tidak diblokir / allow.
+- `/acm integration status` menampilkan rekomendasi `verified=true` untuk 14 command.
+- `/acm integration apply worldguard` menulis 7 aturan ke `commands:` (opt-in).
+- Warning read-only `WorldEdit: max-radius: -1` muncul tanpa menulis config WorldEdit.
+- PlugManX: disable WorldEdit → 162 baris manual-scan menjadi `enabled=0`;
+  enable kembali → 162 baris kembali `enabled=1` lewat PluginEnableEvent.
+- `/acm scan list` menampilkan sumber `manual-scan:WorldEdit` dan `integration`.
+- Migrasi SQLite schema v3 → v4 berhasil dan kolom `action` terbaca.
+- Bahasa Indonesia diregenerasi dari resource; seluruh pesan baru tampil.
+- `./gradlew :AntiChatManager:compileJava` dan pembuatan JAR berhasil.
+
+### 5b.5 Kompatibilitas ke belakang
+
+- Command lama, alias `/antichatmanager`, dan seluruh subcommand lama tetap ada.
+- Config lama tidak ditimpa; key baru hanya ditambahkan. Baris blacklist lama
+  otomatis `BLOCK`.
+- Source lama (`MANUAL`, `PLUGIN_SCAN`, `LUCKPERMS_SCAN`, `IMPORT`) tetap valid.
+- Semua entry baru hanya dibuat oleh admin, konfigurasi eksplisit, atau
+  `plugin-manual-scan`; integrasi WE/FAWE/WG tidak menulis aturan tanpa
+  `/acm integration apply`.
+- `allow` milik admin selalu menang atas hasil scan/manual-scan pada command yang sama.
+- Root `/acm` tidak lagi memakai permission root; framework memeriksa permission
+  subcommand, sehingga admin khusus integration/subcmd tetap bisa bekerja.
+
+### 5b.6 Yang masih memerlukan lingkungan tambahan
+
+- FAWE belum diuji bersama karena bentrok dengan WorldEdit di server uji.
+- LuckPerms, PacketEvents, PlaceholderAPI, Floodgate/Geyser, dan MySQL belum tersedia
+  di server uji ini; audit node sensitif sudah diimplementasikan dan menunggu runtime LP.
+- Pengujian event dengan pemain asli (client) belum dilakukan; matcher dan plugin
+  load/unload sudah diverifikasi lewat konsol dan PlugManX.
+
+---
+
 ## 6. Yang Belum Diverifikasi / Perlu Dilanjutkan di RDP
 
 1. **Uji ulang runtime setelah build terakhir** untuk `/acm help`, `/acm reload`, `/acm scan identify`, `/acm plugins`, `/acm conflicts`, `/acm audit`, `/acm security`.
@@ -203,3 +295,19 @@ Untuk server uji, JAR dev berada di:
 AntiChatManager/build/libs/AntiChatManager-3.0.2-dev+<commit>.jar
 SaryuLibCore/build/libs/SaryuLibCore-3.0.2-dev+<commit>.jar
 ```
+
+---
+
+## 9. Sesi Penyelesaian (audit statis, tanpa build)
+
+Lingkungan sesi ini tidak punya akses jaringan, sehingga `./gradlew build` **tidak dijalankan**. Yang dilakukan hanya audit statis dan perbaikan kecil.
+
+| Temuan | Tindakan | Verifikasi |
+|---|---|---|
+| Kode memakai kunci `messages.internal-error`, tetapi tidak ada di file bahasa, sehingga pengguna `id_ID` melihat pesan Inggris | Tambah `internal-error` di `eng_US.yml` dan `id_ID.yml` | Kedua YAML dimuat ulang tanpa error |
+| `audit.check-users` dibaca kode (default `false`) tetapi tidak ada di `config.yml` | Tambah `audit.check-users: false` dengan komentar | YAML valid, nilai terbaca `false` |
+| Laporan menyebut `.github/workflows/build.yml`, tetapi berkas itu tidak ada di zip (juga tidak ada `.gitignore`) | Buat `.github/workflows/build.yml` (build, test, CodeQL, Gitleaks, OSV), `dependabot.yml`, dan `.gitignore` | YAML valid. **Action masih memakai tag, belum dipin ke SHA** |
+| Konsistensi kunci bahasa | 150 kunci yang dipakai kode semuanya ada di kedua file bahasa (kecuali `help.sub.`, yang memang prefiks dinamis) | Skrip audit |
+| Sintaks Java | 45 berkas diparse oleh `javac` tanpa error sintaks. Error yang tersisa hanya karena dependency (Paper API dll.) tidak tersedia di sini | `jdk.compiler` |
+
+Belum dikerjakan: SBOM dan attestation di CI, tes otomatis keamanan (path traversal, YAML bomb, regex jahat, SSRF), GUI security (tidak ada GUI di kode), serta seluruh poin bagian 6 yang butuh server uji.
