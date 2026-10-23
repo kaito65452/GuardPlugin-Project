@@ -81,6 +81,48 @@ Set `database.type: SQLITE` (default), `H2`, or `MYSQL` in config, restart, veri
 (default 30) purges old violation/scan/punishment rows on startup. SQLite writes are
 drained on shutdown so entries added right before `/stop` are not lost.
 
+Already verified:
+
+| Check | Result |
+|-------|--------|
+| SQLite schema migration to v3 (`acm_blacklist.allowed_groups`) | ✅ |
+| Config v2 → v3 adds `plugin-identity.*`, `audit.*`, `conflict-detection.*` | ✅ |
+| H2 starts (JDBC driver explicitly registered), schema v3 | ✅ |
+| H2 persists 79 blacklist entries across restart, 0 duplicates | ✅ |
+| MySQL | ⚠️ not available in the current test environment |
+
+## 8a. V7 identity, conflicts, audit, security
+
+1. `/acm scan identify` → starts background JAR hash identification. The reply says
+   results are available via `/acm plugins` (lookup is async).
+2. `/acm plugins` → each third-party plugin shows `VERIFIED`/`UNVERIFIED`, confidence,
+   source, and project metadata when Modrinth recognizes the hash.
+3. `/acm conflicts` → lists LuckPerms groups/commands that can bypass ACM; test
+   `/acm conflicts ignore <cmd> [group]` and `/acm conflicts allow <cmd> <group>`.
+4. `/acm audit` → permission findings from LuckPerms; `/acm audit info <id>`,
+   `/acm audit ack <id>`, `/acm audit ignore group|user|node <name>`.
+5. `/acm security` → read-only findings (offline mode, missing LuckPerms/PacketEvents,
+   unsafe JAR permissions, server.properties checks, baseline hash changes).
+6. Delete `plugins/AntiChatManager/security-baseline.yml`, restart, and verify a new
+   baseline is written with flat file-name keys such as `3_0_2-dev-test_jar`.
+7. With LuckPerms installed, change a group permission and confirm conflicts/audit are
+   rescanned automatically after the 5-second debounce.
+8. PlaceholderAPI: verify `%acm_violations%`, `%acm_blacklist_count%`, `%acm_bypass%`,
+   `%acm_conflicts_open%`, `%acm_conflicts_critical%`, and `%acm_audit_open%`.
+
+## 12a. Build and test checks
+
+```bash
+./gradlew clean build     # includes JUnit 5 tests and scanForbiddenApis
+./gradlew test            # focused unit tests
+```
+
+`scanForbiddenApis` fails the build on unsafe JVM APIs (reflection helper exceptions
+such as the optional LuckPerms softdepend are explicitly allowed). Current automated
+coverage is `StringSanitizerTest` and `DurationParserTest`; manual security cases for
+YAML bombs, SSRF, and regex DoS are still on the list.
+
+
 ## 9. Export / import
 
 1. `/acm export backup` → writes `plugins/AntiChatManager/backup.yml`.
@@ -117,9 +159,9 @@ Default config:
 Drop `ExamplePlugin.jar` (built from SaryuLibCore's `example/` module) into `plugins/`
 alongside SaryuLibCore → `/example ping` works, proving library sharing.
 
-## 13. Verified on Paper 26.2 build 134
+## 13. Verified on Paper 26.2 build 134 / 1.21.8
 
-Automated console runs confirmed:
+Automated console runs confirmed (V7 additions were smoke-tested on Paper 1.21.8):
 
 | Check | Result |
 |-------|--------|
@@ -138,3 +180,12 @@ Automated console runs confirmed:
 | LuckPerms 5.5.71 detection + staff-weight scan | ✅ source `LUCKPERMS_SCAN` |
 | PacketEvents 2.14.0 hook (`PacketEvents`, active) | ✅ |
 | PacketEvents absent → no-op layer, no errors | ✅ |
+| V7 `/acm help`, `info`, `security`, `conflicts`, `audit`, `plugins`, `reload` | ✅ Paper 1.21.8 |
+| Config v2 → v3 migration adds new keys without overwriting values | ✅ |
+| `/acm scan identify` + `/acm plugins` with a dummy plugin (`UNVERIFIED`) | ✅ |
+| JAR baseline uses flat file-name keys; hash change warns once | ✅ |
+| H2 schema v3 + persistence across restart | ✅ |
+| `./gradlew test` (JUnit 5) and `scanForbiddenApis` | ✅ |
+| LuckPerms event-triggered rescan | ⚠️ needs LuckPerms installed |
+| PlaceholderAPI placeholders | ⚠️ needs PlaceholderAPI installed |
+| MySQL | ⚠️ no MySQL server available |

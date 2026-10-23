@@ -120,6 +120,23 @@ Edit `plugins/AntiChatManager/config.yml` (documented inline). Key sections:
 - `ban.provider` — `AUTO`, `LITEBANS`, `VANILLA`, `CUSTOM`, etc.
 - `database.type` — `SQLITE`, `H2`, `MYSQL`; `database.retention-days` purges old rows
 - `security.max-command-length`, `security.rate-limit.*`, control-character filters
+- `security.*`, `webhook.*` — SSRF allowlist, alert cooldown, Discord event hooks
+- `plugin-identity.*` — Modrinth hash lookup, cache TTL, minimum confidence
+- `conflict-detection.*` — LuckPerms command conflict review, ignore/allow lists
+- `audit.*` — permission audit, ignore lists, notification interval
+- `scan.*` — auto-scan interval and enable/disable switches
+
+Config files use a versioned schema (`config.version: 3`). On upgrade, SaryuLibCore
+adds new keys without overwriting existing values; old on-disk language files also
+receive missing help rows in memory, so `/acm help` stays complete.
+
+### API and placeholders
+
+`AntiChatManager` exposes `CommandBlacklistedEvent` (cancellable; suppresses alerts and
+punishments while the command remains blocked) and the legacy `BlockedCommandEvent`.
+PlaceholderAPI placeholders include `%acm_version%`, `%acm_language%`,
+`%acm_violations%`, `%acm_blacklist_count%`, `%acm_bypass%`, `%acm_conflicts_open%`,
+`%acm_conflicts_critical%`, and `%acm_audit_open%`.
 
 ## Commands & Permissions
 
@@ -130,13 +147,17 @@ All commands under `/acm` (alias `/antichatmanager`):
 | `/acm help` | `saryuantichatmanager.admin` | List all subcommands |
 | `/acm reload` | `saryuantichatmanager.admin` | Reload config, language, blacklist engine |
 | `/acm info` | `saryuantichatmanager.admin` | Status: DB, packet layer, LuckPerms, language, last scan |
-| `/acm scan [report\|sources]` | `saryuantichatmanager.admin` | Run auto-scan or inspect the last result |
+| `/acm scan [report\|sources\|identify]` | `saryuantichatmanager.admin` | Run auto-scan, inspect the last result, or re-identify plugin JARs |
+| `/acm plugins` | `saryuantichatmanager.admin` | Show plugin identity / Modrinth hash verification results |
+| `/acm conflicts [page\|ignore\|allow]` | `saryuantichatmanager.admin` | Review LuckPerms/blacklist command conflicts |
+| `/acm audit [page\|info\|ack\|ignore]` | `saryuantichatmanager.admin` | Review and manage permission-audit findings |
+| `/acm security` | `saryuantichatmanager.admin` | Run read-only security checks and show recommendations |
 | `/acm blacklist list [source\|plugin] [page]` | `saryuantichatmanager.admin` | List entries (filter by source or plugin) |
 | `/acm blacklist check <cmd>` | `saryuantichatmanager.admin` | Check a command + show source/reason |
 | `/acm blacklist info <id\|cmd>` | `saryuantichatmanager.admin` | Show full entry details |
 | `/acm blacklist add <cmd> [mode] [reason]` | `saryuantichatmanager.admin` | Add a manual entry |
 | `/acm blacklist remove <id\|cmd>` | `saryuantichatmanager.admin` | Remove entry/entries |
-| `/acm blacklist whitelist <cmd>` | `saryuantichatmanager.admin` | Remove auto entries and keep the command clean |
+| `/acm blacklist whitelist <cmd> [group]` | `saryuantichatmanager.admin` | Remove auto entries and keep the command clean (optionally allow a group) |
 | `/acm blacklist purge` | `saryuantichatmanager.admin` | Drop auto entries for commands that no longer exist |
 | `/acm history <player> [page]` | `saryuantichatmanager.admin` | Violation history |
 | `/acm violations [reset] <player>` | `saryuantichatmanager.admin` | Show or reset violation counts |

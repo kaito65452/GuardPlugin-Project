@@ -1,6 +1,6 @@
 # Laporan Implementasi Versi 7
 
-**Status:** pekerjaan dihentikan sementara atas permintaan, perubahan sudah dibangun dan disiapkan untuk di-push ke branch `dev`. Build Gradle terakhir **lulus**.
+**Status:** sesi lanjutan selesai. Build Gradle terakhir **lulus**, migrasi config v3 dan H2 sudah diuji runtime, dan perubahan di-push ke branch `dev`.
 
 - Branch: `dev`
 - Base version: `3.0.2`
@@ -25,13 +25,13 @@ Status: `SUDAH ADA` = sudah berfungsi sebelum perubahan, `SEBAGIAN` = baru sebag
 | Alert chat, template, hex/gradient/MiniMessage, escape pemain | SUDAH ADA | SUDAH ADA | `AlertManager.java`, file bahasa |
 | Anti-amplifikasi alert (cooldown per pemain + batas global per menit) | BELUM | SUDAH ADA | `AlertManager.java`, config `security.alert-cooldown-ms`, `security.alert-per-minute` |
 | Auto-scan command plugin dan LuckPerms | SUDAH ADA | SUDAH ADA | `AutoScanner.java`, `PermissionModule.java` |
-| Skor keyakinan auto-blacklist | BELUM | SEBAGIAN | `PluginIdentityService.java`; skor identitas tersedia, tetapi belum menjadi bobot penuh seluruh sinyal seperti spesifikasi |
-| Identifikasi JAR lewat hash Modrinth/Hangar + `acm_plugin_identity` | BELUM | SEBAGIAN | `PluginIdentityService.java`, `RepositoryClient`, `Storage.java`; Modrinth hash lookup ada, Hangar masih fallback `UNVERIFIED`, metadata proyek/kategori belum lengkap |
+| Skor keyakinan auto-blacklist | BELUM | SEBAGIAN | `PluginIdentityService.java`; skor identitas tersedia dan config fallback `auto-blacklist.min-confidence` ditambahkan, tetapi belum menjadi bobot penuh seluruh sinyal seperti spesifikasi |
+| Identifikasi JAR lewat hash Modrinth/Hangar + `acm_plugin_identity` | BELUM | SEBAGIAN | `PluginIdentityService.java`, `RepositoryClient`, `Storage.java`; lookup async dan path `UNVERIFIED` diuji dengan plugin dummy, Hangar masih fallback `UNVERIFIED`, metadata proyek/kategori belum lengkap |
 | `/acm scan identify`, `/acm plugins` | BELUM | SUDAH ADA | `ACMCommand.java`, `ACMSubcommands.java` |
-| Deteksi konflik LuckPerms vs blacklist/bypass | BELUM | SEBAGIAN | `ConflictDetector.java`, `ACMSubcommands.java`; grup, severity, persistensi status, ignore, allowed-group tersedia; node user/context/temporary belum lengkap |
+| Deteksi konflik LuckPerms vs blacklist/bypass | BELUM | SEBAGIAN | `ConflictDetector.java`, `ACMSubcommands.java`; grup, severity, persistensi status, ignore, allowed-group, fallback `Command#getPermission`, dan rescan event LuckPerms (debounce) tersedia; node user/context/temporary belum lengkap |
 | Status konflik `OPEN/IGNORED/RESOLVED` di database | BELUM | SUDAH ADA | `Storage.java`, tabel `acm_conflicts` |
 | Whitelist per grup per entri blacklist | BELUM | SUDAH ADA | `BlacklistManager.Entry.allowedGroups`, migrasi schema v3, `/acm blacklist whitelist <cmd> [group]` |
-| Audit permission LuckPerms, bypass, wildcard, status temuan | BELUM | SEBAGIAN | `PermissionAudit.java`, `Storage.java`; audit grup/user dan status ada, context/expiry/inherited-origin belum lengkap |
+| Audit permission LuckPerms, bypass, wildcard, status temuan | BELUM | SEBAGIAN | `PermissionAudit.java`, `Storage.java`; audit grup/user, ignore `group/user/node`, dan status ada; context/expiry/inherited-origin belum lengkap |
 | `/acm audit`, `ack`, `ignore`, info | BELUM | SUDAH ADA | `ACMSubcommands.java` |
 | Notifikasi staf saat join dan pengingat konflik/audit | SEBAGIAN | SEBAGIAN | `PlayerListener.java`, `ConflictDetector.java`, `PermissionAudit.java`; throttling/interval belum sepenuhnya disamakan dengan spesifikasi |
 | Keamanan level paket, PacketEvents, tab-complete, buku/sign/anvil/clickEvent | SEBAGIAN | SEBAGIAN | `PlayerListener.java`, `PacketInterceptor.java`; handler Bukkit ditambahkan, PacketEvents tidak tersedia di server uji |
@@ -41,19 +41,19 @@ Status: `SUDAH ADA` = sudah berfungsi sebelum perubahan, `SEBAGIAN` = baru sebag
 | YAML aman, batas ukuran/alias/kedalaman | BELUM | SEBAGIAN | `ACMCommand.java`; guard import YAML ditambahkan, belum menjadi parser global untuk semua YAML |
 | Path traversal import/export | BELUM | SUDAH ADA | `ACMCommand.safeDataFile`, validasi path relatif dan symlink |
 | Database: prepared statement, async, queue berbatas, schema version | SUDAH ADA | SUDAH ADA | `DatabaseModule.java`, `Storage.java` |
-| UPSERT lintas SQLite/MySQL/H2 | SEBAGIAN | SEBAGIAN | `Storage.java`; SQLite/MySQL/H2 dibedakan, counter H2 diperbaiki ke UPDATE-then-INSERT; MySQL/H2 belum diuji runtime |
+| UPSERT lintas SQLite/MySQL/H2 | SEBAGIAN | SEBAGIAN | `Storage.java`; SQLite/MySQL/H2 dibedakan, counter H2 diperbaiki ke UPDATE-then-INSERT; **H2 schema v3 + persistensi 79 entri sudah diuji runtime**, MySQL belum tersedia di server uji |
 | Migrasi schema v3 `allowed_groups` | BELUM | SUDAH ADA | `DatabaseModule.applySchemaV3` |
 | Punishment bertahap, durasi, provider ban otomatis | SUDAH ADA | SUDAH ADA | `PunishmentTracker.java`, `PunishmentService.java` |
-| API event, audit log, PlaceholderAPI | BELUM | SEBAGIAN | `api/`, `security/AuditLog.java`, `integration/ACMPlaceholderExpansion.java`; runtime PAPI belum diuji |
+| API event, audit log, PlaceholderAPI | BELUM | SEBAGIAN | `api/` (`CommandBlacklistedEvent` cancellable + `BlockedCommandEvent`), `security/AuditLog.java`, `integration/ACMPlaceholderExpansion.java` (`violations`, `blacklist_count`, `bypass`, `conflicts_*`, `audit_open`); runtime PAPI belum diuji |
 | Audit keamanan startup, hash JAR, baseline JAR, cek server.properties | BELUM | SEBAGIAN | `SecurityAudit.java`; cek RCON/query/secure-profile/offline-mode/baseline JAR ditambahkan, status OP/LuckPerms sebagian |
 | `/acm security` dan hash JAR di `/acm info` | BELUM | SUDAH ADA | `ACMSubcommands.java`, `ACMCommand.java` |
 | Bahasa `eng_US` default + `id_ID` + fallback | SUDAH ADA | SUDAH ADA | `LanguageManager.java`, file bahasa |
 | Help `/acm` tetap kompatibel dan menampilkan command baru | SUDAH ADA | SUDAH ADA | `HelpSub`; command baru di-append otomatis jika file bahasa lama belum memuat baris baru |
 | Hot reload seluruh service baru | SEBAGIAN | SUDAH ADA | `AntiChatManager.reloadAll()`, `ReloadSub` |
-| CI supply-chain: pin action SHA, permission minimum, CodeQL/Semgrep/OSV/Gitleaks/Grype, SBOM, attestation | BELUM | BELUM | `.github/workflows/build.yml` belum diubah pada tahap ini |
-| Tes otomatis V7 (path traversal, YAML bomb, regex, injeksi, SSRF, spam alert, DB penuh, GUI) | BELUM | BELUM | Belum ada folder `src/test` untuk skenario tersebut |
+| CI supply-chain: pin action SHA, permission minimum, CodeQL/Semgrep/OSV/Gitleaks/Grype, SBOM, attestation | BELUM | SEBAGIAN | `.github/workflows/build.yml`; semua action sudah di-pin ke SHA, wrapper validation dan least privilege ditambahkan; scanner CodeQL/Semgrep/OSV/Gitleaks/Grype, SBOM, attestation belum |
+| Tes otomatis V7 (path traversal, YAML bomb, regex, injeksi, SSRF, spam alert, DB penuh, GUI) | BELUM | SEBAGIAN | 6 unit test JUnit 5 untuk `StringSanitizer` dan `DurationParser`; skenario keamanan lain belum |
 | GUI security SaryuLibCore | BELUM | BELUM | Belum diverifikasi/ditambahkan pada tahap ini |
-| Version injection dev/stable | SUDAH ADA | SUDAH ADA | `build.gradle.kts`; dev menampilkan `3.0.2-dev+<commit>` |
+| Version injection dev/stable | SUDAH ADA | SUDAH ADA | `build.gradle.kts`; cache `build-info.properties`/`plugin.yml` diperbaiki, kini keduanya menampilkan `3.0.2-dev+<commit>` |
 
 ---
 
@@ -128,24 +128,48 @@ Status: `SUDAH ADA` = sudah berfungsi sebelum perubahan, `SEBAGIAN` = baru sebag
   - `/acm conflicts`
   - `/acm audit`
   - `/acm plugins`
-- Migrasi SQLite sampai schema v2 berhasil pada uji sebelumnya.
-- `/acm scan identify` dan `/acm plugins` sempat menampilkan data kosong sebelum perbaikan reflection file plugin; perbaikan sudah dibangun, tetapi belum diuji ulang di server.
-- Schema v3 `allowed_groups` sudah dikompilasi, tetapi belum diuji runtime setelah build terakhir.
+- Migrasi SQLite schema v3 berhasil; migrasi config v2 → v3 menambahkan key baru.
+- H2: `available=true`, schema v3, 79 entri dimuat ulang tanpa duplikasi setelah restart.
+- `/acm scan identify` + `/acm plugins` diuji dengan plugin dummy: tampil `DummyIdentity - UNVERIFIED (conf=0%)`.
+- Baseline JAR baru memakai key datar; peringatan perubahan JAR muncul sekali lalu baseline diperbarui.
+- `./gradlew test` lulus (6 test).
+
+---
+
+## 5a. Perbaikan Sesi Lanjutan (Setelah Laporan Awal)
+
+| Bug / celah | Perbaikan | Verifikasi |
+|---|---|---|
+| `build-info.properties` dan `plugin.yml` bisa tertinggal di commit lama karena task Gradle dianggap up-to-date | Tambah `inputs.property` untuk versi/commit/channel di `generateBuildInfo` dan `processResources` | Build bersih: kedua JAR melaporkan `3.0.2-dev+5804cb0` |
+| Migrasi config tidak benar-benar menambah key baru karena `config.contains()` ikut membaca defaults | `migrate()` membandingkan dengan salinan mentah file pengguna | Config v2 → v3 menambahkan `plugin-identity.*`, `audit.*`, `conflict-detection.*` |
+| H2 gagal start: fat jar hanya menyimpan satu `META-INF/services/java.sql.Driver` | Registrasi eksplisit `org.sqlite.JDBC`, `org.h2.Driver`, `com.mysql.cj.jdbc.Driver` | H2 `available=true`, schema v3, 79 entri bertahan setelah restart |
+| Baseline JAR memakai nama file sebagai path YAML, sehingga `3.0.2` terpecah menjadi nested key | Key baseline memakai nama file yang di-escape (`3_0_2-dev-test_jar`) | Baseline baru berisi hash datar; perubahan JAR memicu satu warning |
+| `StringSanitizer` gagal membuang slash jika ada spasi di depannya | Trim dan buang slash berulang sebelum collapse whitespace | Unit test lulus |
+| `ConflictDetector` melewatkan entri tanpa `permission` eksplisit | Fallback ke `Command#getPermission` dari command map | Build + unit test; runtime LP belum |
+| `/acm audit ignore node <node>` diperlakukan sebagai grup | Dukungan tipe `group|user|node` + tandai temuan `IGNORED` | Build; runtime LP belum |
+| `/acm scan identify` tidak benar-benar mengulang karena cache | `identifyNow()` memaksa lookup ulang | Dummy plugin tampil `UNVERIFIED` di `/acm plugins` |
+| Tidak ada event API yang cancellable sesuai spesifikasi | Tambah `CommandBlacklistedEvent` (cancellable, menekan alert/punishment; command tetap diblokir) | Build |
+| Rescan konflik/audit saat permission LuckPerms berubah belum ada | Subscribe `NodeMutateEvent`, `GroupDataRecalculateEvent`, `UserDataRecalculateEvent` via reflection + debounce 5 detik | Build; runtime LP belum |
+| Webhook bisa disisipi markdown/mention | Escape markdown Discord sebelum JSON | Build |
+| Template `alert.templates.*` dari spesifikasi tidak terbaca | Baca `alert.templates` dan root `templates`, config dan language | Build |
+| `/acm help` tidak menampilkan subcommand baru pada file bahasa lama | Fallback dinamis + merge key bahasa di memori | Runtime `/acm help` menampilkan plugins/conflicts/audit/security |
+| Config `plugin-identity.*` vs `auto-blacklist.modrinth.*` | Baca keduanya (fallback kompatibel) | Build |
+| Tidak ada automated security test | Tambah JUnit 5 + 6 test sanitasi/durasi | `./gradlew test` lulus |
 
 ---
 
 ## 6. Yang Belum Diverifikasi / Perlu Dilanjutkan di RDP
 
 1. **Uji ulang runtime setelah build terakhir** untuk `/acm help`, `/acm reload`, `/acm scan identify`, `/acm plugins`, `/acm conflicts`, `/acm audit`, `/acm security`.
-2. **LuckPerms**: uji konflik grup default/bypass, `*`, inheritance, `ack`, `ignore`, `RESOLVED`, notifikasi join. Server uji saat ini tidak memasang LuckPerms.
-3. **MySQL dan H2**: uji UPSERT, schema v3, counter H2, dan persistensi status.
-4. **PlaceholderAPI**: uji ekspansi `%acm_violations%` dan `%acm_blacklist_count%` dengan PlaceholderAPI terpasang.
+2. **LuckPerms**: uji konflik grup default/bypass, `*`, inheritance, `ack`, `ignore`, `RESOLVED`, notifikasi join, dan rescan event. Server uji saat ini tidak memasang LuckPerms.
+3. **MySQL**: uji UPSERT, schema v3, dan persistensi status. H2 sudah lulus; MySQL belum tersedia di server uji.
+4. **PlaceholderAPI**: uji ekspansi `%acm_violations%`, `%acm_blacklist_count%`, `%acm_bypass%`, `%acm_conflicts_*%` dengan PlaceholderAPI terpasang.
 5. **PacketEvents/Floodgate**: uji pemblokiran sebelum Bukkit dan identitas Bedrock.
 6. **Baseline JAR**: verifikasi `security-baseline.yml`, peringatan JAR berubah, dan hash di `/acm info`.
-7. **CI supply-chain**: pin semua GitHub Action ke commit SHA, pisahkan job rilis dengan permission `contents: write`, tambahkan CodeQL/Semgrep/OSV/Gitleaks/Grype, SBOM, dan attestation.
+7. **CI supply-chain**: action sudah di-pin ke SHA dan wrapper validation ditambahkan; lanjutkan CodeQL/Semgrep/OSV/Gitleaks/Grype, SBOM, dan attestation.
 8. **Tes otomatis**: path traversal, YAML bomb, regex jahat, injeksi log/command, SSRF, spam alert, DB queue penuh, klik GUI tidak valid, config rusak.
-9. **`SaryuLibCore` version display**: runtime masih melaporkan `3.0.2` saat JAR dev dipakai; perlu dicek ulang proses `processResources`/caching build-info.
-10. **File bahasa lama di server uji** belum memuat baris help baru; fallback dinamis sudah ditambahkan di kode, tetapi perlu restart untuk membuktikan tampilan help terbaru.
+9. **`SaryuLibCore` version display**: sudah diperbaiki; runtime melaporkan `3.0.2-dev+5804cb0`.
+10. **File bahasa lama di server uji**: sudah diuji; fallback dinamis menampilkan subcommand baru pada `/acm help`.
 
 ---
 
