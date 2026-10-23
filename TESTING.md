@@ -51,11 +51,19 @@ Start the server once, then edit `plugins/AntiChatManager/config.yml` as needed 
 
 ## 6. Language switching
 
-1. `/acm language id_ID` → messages in Indonesian (also `/acm language set id_ID`).
-2. `/acm language eng_US` → back to English.
-3. `/acm language reload` or `/acm reload` → re-read edited language files.
-4. Missing keys fall back to English automatically.
-5. With `language-per-player: true`, a client using `id_id` gets Indonesian.
+1. `/acm language` → numbered list with the active language and a set hint.
+2. `/acm language set id_ID` and `/acm language id_ID` → Indonesian, confirmation is
+   sent in the new language; `language: id_ID` is persisted in `config.yml`.
+3. `/acm language set 1` / `set 2` → switch by list number.
+4. `/acm language set ENG_us` and `/acm language ID` → case-insensitive and aliases work.
+5. `/acm language zz_ZZ` → unknown-language error plus the available language list.
+6. `/acm language reload` or `/acm reload` → re-read edited language files.
+7. Missing keys in a non-default language fall back to English automatically. Delete a
+   key from the on-disk `id_ID.yml`, reload, and verify the English value is used.
+8. `/acm help` under `id_ID` shows translated command descriptions in the same order.
+9. With `language-per-player: true`, a client using `id_id` gets Indonesian.
+10. Unknown subcommands show a prefix, parsed colours, and a "Did you mean ...?" line;
+    `/acm set language id_ID` suggests `/acm language set id_ID`.
 
 ## 7. Alert templates
 
@@ -122,7 +130,10 @@ Automated console runs confirmed:
 | Graceful shutdown persists queued writes | ✅ 79 rows |
 | `/acm info`, `blacklist list/check/info/add/remove`, `history`, `violations` | ✅ |
 | `/acm template preview` (sample substitution) | ✅ |
-| `/acm language id_ID` → Indonesian messages | ✅ |
+| `/acm language` list + `set <code\|number>` (hot reload, persisted) | ✅ |
+| `/acm language id_ID` → Indonesian messages and help rows | ✅ |
+| Unknown language lists available languages; unknown subcommand suggests reorder | ✅ |
+| `/acm info` shows `3.0.2-dev+<commit> (dev, commit <hash>)` | ✅ |
 | `/acm reload` (no DB reconnect with unchanged settings) | ✅ |
 | LuckPerms 5.5.71 detection + staff-weight scan | ✅ source `LUCKPERMS_SCAN` |
 | PacketEvents 2.14.0 hook (`PacketEvents`, active) | ✅ |

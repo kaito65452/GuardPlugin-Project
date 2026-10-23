@@ -66,7 +66,9 @@ public class SaryuLib extends JavaPlugin {
         registerService(IntegrationModule.class, integrationModule);
         registerService(CommandFramework.class, commandFramework);
 
-        getLogger().info("SaryuLibCore v" + getDescription().getVersion() + " enabled.");
+        getLogger().info("SaryuLibCore "
+                + BuildInfo.load(SaryuLib.class, getDescription().getVersion()).display()
+                + " enabled.");
     }
 
     @Override

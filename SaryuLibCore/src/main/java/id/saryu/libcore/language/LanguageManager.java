@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.logging.Level;
@@ -111,11 +112,14 @@ public class LanguageManager {
     }
 
     /**
-     * Add keys introduced by a plugin update to an existing on-disk language file.
+     * Add keys introduced by a plugin update to an existing on-disk default-language
+     * file. Non-default languages are intentionally not auto-completed so that a
+     * key deleted by an administrator really falls back to {@code eng_US}.
      * The merge is in-memory so user edits (and comments) on disk are untouched;
-     * delete the file to regenerate it from the bundled resource.
+     * delete a non-default file to regenerate it from the bundled resource.
      */
     private void mergeBundledDefaults(@NotNull String code, @NotNull YamlConfiguration target) {
+        if (!DEFAULT_CODE.equalsIgnoreCase(code)) return;
         try (InputStream in = owner.getResource("languages/" + code + ".yml")) {
             if (in == null) return;
             YamlConfiguration bundled = YamlConfiguration.loadConfiguration(
@@ -136,7 +140,8 @@ public class LanguageManager {
     }
 
     private void reloadActive() {
-        activeCode = config.getString("language", DEFAULT_CODE);
+        String configured = config.getString("language", DEFAULT_CODE);
+        activeCode = normalizeCode(configured);
         if (!messages.containsKey(activeCode)) {
             activeCode = DEFAULT_CODE;
         }
@@ -153,6 +158,38 @@ public class LanguageManager {
 
     public @NotNull Map<String, YamlConfiguration> getLoaded() {
         return Collections.unmodifiableMap(messages);
+    }
+
+    /** Loaded language codes in stable display order (default first). */
+    public @NotNull List<String> getCodes() {
+        return new java.util.ArrayList<>(messages.keySet());
+    }
+
+    /**
+     * Human-readable language name from {@code language.name}. Falls back to the
+     * code when the file does not declare a name.
+     */
+    public @NotNull String getDisplayName(@NotNull String code) {
+        YamlConfiguration cfg = messages.get(code);
+        if (cfg == null) cfg = messages.get(normalizeCode(code));
+        String name = cfg != null ? cfg.getString("language.name") : null;
+        return name == null || name.isBlank() ? code : name;
+    }
+
+    /**
+     * Look up {@code messages.<key>} as a YAML string list, falling back to the
+     * default language. Used for localised help rows.
+     */
+    public @NotNull List<String> messageList(@NotNull String key) {
+        YamlConfiguration active = messages.get(activeCode);
+        List<String> values = active != null
+                ? active.getStringList("messages." + key) : Collections.emptyList();
+        if (values.isEmpty()) {
+            YamlConfiguration def = messages.get(DEFAULT_CODE);
+            values = def != null
+                    ? def.getStringList("messages." + key) : Collections.emptyList();
+        }
+        return values;
     }
 
     /**

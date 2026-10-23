@@ -1,0 +1,76 @@
+name: Build
+
+on:
+  push:
+    branches: ["dev"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build (dev)
+        if: github.ref == 'refs/heads/dev'
+        run: ./gradlew clean build --no-daemon
+
+      - name: Build (release)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: ./gradlew clean build -Prelease --no-daemon
+
+      - name: Upload dev artifacts
+        if: github.ref == 'refs/heads/dev'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-jars
+          path: |
+            SaryuLibCore/build/libs/*.jar
+            AntiChatManager/build/libs/*.jar
+            !**/*-sources.jar
+          if-no-files-found: error
+
+      - name: Create/update dev-latest pre-release
+        if: github.ref == 'refs/heads/dev'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dev-latest
+          name: AntiChatManager dev-latest
+          prerelease: true
+          generate_release_notes: true
+          files: |
+            SaryuLibCore/build/libs/SaryuLibCore-*.jar
+            AntiChatManager/build/libs/AntiChatManager-*.jar
+
+      - name: Create GitHub release from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            SaryuLibCore/build/libs/SaryuLibCore-*.jar
+            AntiChatManager/build/libs/AntiChatManager-*.jar

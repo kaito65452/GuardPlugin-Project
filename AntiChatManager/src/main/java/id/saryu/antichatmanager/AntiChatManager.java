@@ -10,6 +10,7 @@ import id.saryu.antichatmanager.punishment.PunishmentTracker;
 import id.saryu.antichatmanager.scan.AutoScanner;
 import id.saryu.antichatmanager.storage.Storage;
 import id.saryu.antichatmanager.util.RateLimitModule;
+import id.saryu.libcore.BuildInfo;
 import id.saryu.libcore.SaryuLib;
 import id.saryu.libcore.config.ConfigModule;
 import id.saryu.libcore.language.LanguageManager;
@@ -36,6 +37,7 @@ public class AntiChatManager extends JavaPlugin {
     private static AntiChatManager instance;
 
     private SaryuLib lib;
+    private BuildInfo buildInfo;
     private ConfigModule config;
     private LanguageManager lang;
     private MessageModule msg;
@@ -53,6 +55,7 @@ public class AntiChatManager extends JavaPlugin {
     @Override
     public void onEnable() {
         instance = this;
+        buildInfo = BuildInfo.load(AntiChatManager.class, getDescription().getVersion());
 
         lib = SaryuLib.getInstanceSafe();
         if (lib == null) {
@@ -106,7 +109,7 @@ public class AntiChatManager extends JavaPlugin {
 
         Bukkit.getPluginManager().registerEvents(playerListener, this);
 
-        getLogger().info("AntiChatManager v" + getDescription().getVersion() + " enabled. "
+        getLogger().info("AntiChatManager " + buildInfo.display() + " enabled. "
                 + "Database=" + lib.getDatabaseModule().getType()
                 + ", packet layer=" + packetLayer.getBackendName()
                 + ", blacklist entries=" + blacklist.count(null));
@@ -135,6 +138,7 @@ public class AntiChatManager extends JavaPlugin {
     }
 
     public SaryuLib getLib() { return lib; }
+    public BuildInfo getBuildInfo() { return buildInfo; }
     public ConfigModule getConfigModule() { return config; }
     public LanguageManager getLang() { return lang; }
     public MessageModule getMsg() { return msg; }

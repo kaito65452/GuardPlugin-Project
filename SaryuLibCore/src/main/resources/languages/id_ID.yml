@@ -9,6 +9,15 @@ messages:
   noperm: "&cKamu tidak memiliki izin untuk menggunakan perintah ini."
   playeronly: "&cPerintah ini hanya dapat digunakan oleh pemain."
   unknown: "&cSubperintah tidak diketahui: &7{sub}"
+  command.unknown-subcommand: "%prefix%&cSubperintah tidak diketahui: &7{sub}"
+  command.usage: "%prefix%&7Penggunaan: &f{usage}"
+  command.subcommands: "%prefix%&7Subperintah: &f{subcommands}"
+  command.did-you-mean: "%prefix%&7Maksud kamu &f{suggestion}&7?"
+  command.no-permission: "%prefix%&cKamu tidak memiliki izin untuk menggunakan perintah ini."
+  command.no-sub-permission: "%prefix%&cKamu tidak memiliki izin untuk menggunakan subperintah ini."
+  command.player-only: "%prefix%&cPerintah ini hanya dapat digunakan oleh pemain."
+  command.cooldown: "%prefix%&cTunggu sebentar sebelum menggunakan perintah ini lagi."
+  command.internal-error: "%prefix%&cTerjadi kesalahan internal. Periksa konsol."
   db.unavailable: "&cDatabase tidak tersedia; berjalan dalam mode offline."
 
 errors:
