@@ -1,5 +1,5 @@
 name: AntiChatManager
-version: 3.0.1
+version: ${version}
 api-version: '1.21'
 main: id.saryu.antichatmanager.AntiChatManager
 description: Advanced chat and command management with blacklist, auto-scan, alerts, and punishments.

@@ -15,7 +15,6 @@ AntiChatManager/                    # Root Gradle project
 ├── gradle/libs.versions.toml       # Version catalog
 ├── gradle.properties               # Gradle settings
 ├── gradlew / gradlew.bat           # Gradle wrapper
-├── prompt-antichatmanager.md       # Original specification
 ├── SaryuLibCore/                   # Shared library (id.saryu.libcore)
 │   ├── build.gradle.kts            # Fat-jar build, bundles HikariCP + JDBC drivers
 │   ├── src/main/java/id/saryu/libcore/
@@ -38,7 +37,7 @@ AntiChatManager/                    # Root Gradle project
 │   │   ├── plugin.yml
 │   │   ├── config.yml
 │   │   └── languages/ (eng_US.yml, id_ID.yml)
-│   └── build/libs/SaryuLibCore-3.0.1.jar
+│   └── build/libs/SaryuLibCore-3.0.2-dev+<commit>.jar
 ├── AntiChatManager/                # Plugin (id.saryu.antichatmanager)
 │   ├── build.gradle.kts            # Depends on SaryuLibCore (compileOnly Paper/Adventure)
 │   ├── src/main/java/id/saryu/antichatmanager/
@@ -55,7 +54,7 @@ AntiChatManager/                    # Root Gradle project
 │   │   ├── plugin.yml              # depend: SaryuLibCore
 │   │   ├── config.yml              # Full commented config
 │   │   └── languages/ (eng_US.yml, id_ID.yml)
-│   └── build/libs/AntiChatManager-3.0.1.jar
+│   └── build/libs/AntiChatManager-3.0.2-dev+<commit>.jar
 └── README.md                       # This file
 ```
 
@@ -70,12 +69,21 @@ AntiChatManager/                    # Root Gradle project
 ## Build
 
 ```bash
+# Development build: 3.0.2-dev+<short-commit>, channel "dev"
 ./gradlew build
+
+# Stable build: 3.0.2, channel "stable"
+./gradlew build -Prelease
 ```
 
 This produces:
-- `SaryuLibCore/build/libs/SaryuLibCore-3.0.1.jar` (fat jar with bundled DB drivers)
-- `AntiChatManager/build/libs/AntiChatManager-3.0.1.jar`
+- `SaryuLibCore/build/libs/SaryuLibCore-<version>.jar` (fat jar with bundled DB drivers)
+- `AntiChatManager/build/libs/AntiChatManager-<version>.jar`
+
+The version and channel are derived from `build.gradle.kts` and the current Git commit,
+then injected into both `plugin.yml` files and `build-info.properties`. `/acm info` and
+the startup log display the full build string, for example
+`3.0.2-dev+abc1234 (dev, commit abc1234)`.
 
 Install both JARs in your server's `plugins/` folder. Start the server once to generate
 configs, then restart.
@@ -133,7 +141,7 @@ All commands under `/acm` (alias `/antichatmanager`):
 | `/acm history <player> [page]` | `saryuantichatmanager.admin` | Violation history |
 | `/acm violations [reset] <player>` | `saryuantichatmanager.admin` | Show or reset violation counts |
 | `/acm template list\|preview\|set <name>` | `saryuantichatmanager.admin` | Manage alert templates |
-| `/acm language [list\|reload\|<code>]` | `saryuantichatmanager.admin` | Change or reload languages |
+| `/acm language [list\|reload\|set <code\|number>]` | `saryuantichatmanager.admin` | Show, change (code or list number) or reload languages |
 | `/acm export [file]` | `saryuantichatmanager.admin` | Export blacklist to YAML |
 | `/acm import <file>` | `saryuantichatmanager.admin` | Import blacklist from YAML |
 
