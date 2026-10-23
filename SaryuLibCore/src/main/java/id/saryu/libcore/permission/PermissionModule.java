@@ -10,6 +10,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -65,6 +66,159 @@ public class PermissionModule {
 
     public boolean hasLuckPerms() {
         return luckpermsAvailable;
+    }
+
+    /* ----------------------------------------------------------------------
+     * LuckPerms snapshots used by conflict detection and the security audit.
+     * Reflection keeps LuckPerms optional: no class is loaded when it is absent.
+     * ---------------------------------------------------------------------- */
+
+    /** Immutable permission-holder snapshot (group or user). */
+    public static final class HolderSnapshot {
+        public final String type;
+        public final String name;
+        public final String identifier;
+        public final String primaryGroup;
+        public final int weight;
+        public final Map<String, Boolean> nodes;
+        public final long expiresAt;
+        public final boolean defaultGroup;
+
+        HolderSnapshot(String type, String name, String identifier, String primaryGroup,
+                       int weight, Map<String, Boolean> nodes, long expiresAt, boolean defaultGroup) {
+            this.type = type;
+            this.name = name;
+            this.identifier = identifier;
+            this.primaryGroup = primaryGroup;
+            this.weight = weight;
+            this.nodes = nodes == null ? Map.of() : Map.copyOf(nodes);
+            this.expiresAt = expiresAt;
+            this.defaultGroup = defaultGroup;
+        }
+
+        /**
+         * LuckPerms applies explicit nodes first and wildcard nodes next. A
+         * negative exact node always wins over a positive wildcard.
+         */
+        public boolean grants(@NotNull String permission) {
+            if (permission == null || permission.isEmpty()) return false;
+            Boolean exact = nodes.get(permission);
+            if (Boolean.FALSE.equals(exact)) return false;
+            if (Boolean.TRUE.equals(exact)) return true;
+            if (permission.indexOf('.') >= 0) {
+                String current = permission;
+                while (current.contains(".")) {
+                    current = current.substring(0, current.lastIndexOf('.'));
+                    Boolean inherited = nodes.get(current + ".*");
+                    if (Boolean.FALSE.equals(inherited)) return false;
+                    if (Boolean.TRUE.equals(inherited)) return true;
+                }
+            }
+            Boolean global = nodes.get("*");
+            return Boolean.TRUE.equals(global);
+        }
+
+        public boolean hasBypass(@NotNull String bypassNode) {
+            return grants(bypassNode)
+                    || grants("saryuantichatmanager.*")
+                    || grants("*");
+        }
+    }
+
+    public @NotNull List<HolderSnapshot> snapshotGroups(@NotNull String defaultGroup) {
+        List<HolderSnapshot> result = new java.util.ArrayList<>();
+        if (!luckpermsAvailable) return result;
+        try {
+            Object lp = luckPermsInstance();
+            Object gm = groupManager(lp);
+            if (gm == null) return result;
+            int defaultWeight = groupWeight(groupByName(gm, defaultGroup));
+            Class<?> gmIface = Class.forName("net.luckperms.api.model.group.GroupManager");
+            Object rawGroups = gmIface.getMethod("getLoadedGroups").invoke(gm);
+            if (!(rawGroups instanceof Collection<?> groups)) return result;
+            Class<?> groupIface = Class.forName("net.luckperms.api.model.group.Group");
+            for (Object group : groups) {
+                Object nameObj = groupIface.getMethod("getName").invoke(group);
+                String name = nameObj == null ? "" : nameObj.toString();
+                if (name.isBlank()) continue;
+                Map<String, Boolean> nodes = groupNodes(group);
+                int weight = groupWeight(group);
+                result.add(new HolderSnapshot("GROUP", name, name, name, weight,
+                        nodes == null ? Map.of() : nodes, 0,
+                        name.equalsIgnoreCase(defaultGroup) || weight == defaultWeight));
+            }
+        } catch (Throwable t) {
+            plugin.getLogger().log(Level.FINE, "LuckPerms group snapshot failed: " + t.getMessage(), t);
+        }
+        return result;
+    }
+
+    public @NotNull List<HolderSnapshot> snapshotUsers() {
+        List<HolderSnapshot> result = new java.util.ArrayList<>();
+        if (!luckpermsAvailable) return result;
+        try {
+            Object lp = luckPermsInstance();
+            if (lp == null) return result;
+            Class<?> api = Class.forName("net.luckperms.api.LuckPerms");
+            Object userManager = api.getMethod("getUserManager").invoke(lp);
+            Class<?> umIface = Class.forName("net.luckperms.api.model.user.UserManager");
+            Object rawUsers;
+            try {
+                rawUsers = umIface.getMethod("getLoadedUsers").invoke(userManager);
+            } catch (NoSuchMethodException ex) {
+                rawUsers = null;
+            }
+            if (!(rawUsers instanceof Collection<?> users)) return result;
+            Class<?> userIface = Class.forName("net.luckperms.api.model.user.User");
+            for (Object user : users) {
+                Object uuidObj = userIface.getMethod("getUniqueId").invoke(user);
+                Object nameObj = userIface.getMethod("getUsername").invoke(user);
+                Object primaryObj = userIface.getMethod("getPrimaryGroup").invoke(user);
+                String uuid = uuidObj == null ? "" : uuidObj.toString();
+                String name = nameObj == null ? uuid : nameObj.toString();
+                String primary = primaryObj == null ? "" : primaryObj.toString();
+                Map<String, Boolean> nodes = holderNodes(user);
+                result.add(new HolderSnapshot("USER", name, uuid, primary, 0,
+                        nodes == null ? Map.of() : nodes, 0, false));
+            }
+        } catch (Throwable t) {
+            plugin.getLogger().log(Level.FINE, "LuckPerms user snapshot failed: " + t.getMessage(), t);
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private @Nullable Map<String, Boolean> holderNodes(@NotNull Object holder) throws Exception {
+        Object nodes;
+        try {
+            Class<?> holderIface = Class.forName("net.luckperms.api.model.PermissionHolder");
+            Object queryOptions = holderIface.getMethod("getQueryOptions").invoke(holder);
+            Class<?> queryIface = Class.forName("net.luckperms.api.query.QueryOptions");
+            nodes = holderIface.getMethod("resolveInheritedNodes", queryIface).invoke(holder, queryOptions);
+        } catch (Throwable ignored) {
+            Class<?> holderIface = Class.forName("net.luckperms.api.model.PermissionHolder");
+            nodes = holderIface.getMethod("getNodes").invoke(holder);
+        }
+        if (nodes instanceof Map<?, ?> map) {
+            Map<String, Boolean> result = new java.util.HashMap<>();
+            for (Map.Entry<?, ?> e : map.entrySet()) {
+                result.put(String.valueOf(e.getKey()), Boolean.TRUE.equals(e.getValue()));
+            }
+            return result;
+        }
+        if (nodes instanceof Collection<?> collection) {
+            Map<String, Boolean> result = new java.util.HashMap<>();
+            Class<?> nodeIface = Class.forName("net.luckperms.api.node.Node");
+            for (Object node : collection) {
+                Object key = nodeIface.getMethod("getKey").invoke(node);
+                Object value = nodeIface.getMethod("getValue").invoke(node);
+                if (key != null) {
+                    result.put(key.toString(), value instanceof Boolean b ? b : Boolean.TRUE);
+                }
+            }
+            return result;
+        }
+        return null;
     }
 
     /**

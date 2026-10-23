@@ -9,6 +9,7 @@ import id.saryu.libcore.command.CommandFramework;
 import id.saryu.libcore.integration.IntegrationModule;
 import id.saryu.libcore.permission.PermissionModule;
 import id.saryu.libcore.punishment.PunishmentService;
+import id.saryu.libcore.repository.RepositoryClient;
 import id.saryu.libcore.scheduler.SchedulerModule;
 import id.saryu.libcore.service.ServiceRegistry;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -37,6 +38,7 @@ public class SaryuLib extends JavaPlugin {
     private PunishmentService punishmentService;
     private IntegrationModule integrationModule;
     private CommandFramework commandFramework;
+    private RepositoryClient repositoryClient;
 
     @Override
     public void onEnable() {
@@ -51,6 +53,7 @@ public class SaryuLib extends JavaPlugin {
         permissionModule = new PermissionModule(this);
         punishmentService = new PunishmentService(this);
         integrationModule = new IntegrationModule(this);
+        repositoryClient = new RepositoryClient(this);
         commandFramework = new CommandFramework(this);
         registerLibCommands();
 
@@ -64,6 +67,7 @@ public class SaryuLib extends JavaPlugin {
         registerService(PermissionModule.class, permissionModule);
         registerService(PunishmentService.class, punishmentService);
         registerService(IntegrationModule.class, integrationModule);
+        registerService(RepositoryClient.class, repositoryClient);
         registerService(CommandFramework.class, commandFramework);
 
         getLogger().info("SaryuLibCore "
@@ -79,6 +83,7 @@ public class SaryuLib extends JavaPlugin {
         punishmentService = null;
         permissionModule = null;
         integrationModule = null;
+        repositoryClient = null;
         commandFramework = null;
         packetLayer = null;
         schedulerModule = null;
@@ -201,6 +206,10 @@ public class SaryuLib extends JavaPlugin {
 
     public @NotNull IntegrationModule getIntegrationModule() {
         return integrationModule;
+    }
+
+    public @NotNull RepositoryClient getRepositoryClient() {
+        return repositoryClient;
     }
 
     public @NotNull CommandFramework getCommandFramework() {

@@ -35,11 +35,14 @@ public class DatabaseModule {
     private volatile Type type;
     private volatile HikariDataSource dataSource;
     private volatile String loadedSignature;
-    private final ExecutorService asyncDb = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "saryulib-db-async");
-        t.setDaemon(true);
-        return t;
-    });
+    /*
+     * Bounded queue: a misbehaving plugin cannot grow the JVM heap without
+     * limit. When full, the oldest queued write is discarded and logged instead
+     * of blocking the server thread.
+     */
+    private final java.util.concurrent.atomic.AtomicLong droppedWrites =
+            new java.util.concurrent.atomic.AtomicLong();
+    private final ExecutorService asyncDb;
     private volatile int schemaVersion = 1;
     private volatile boolean available = false;
 
@@ -47,6 +50,26 @@ public class DatabaseModule {
         this.plugin = plugin;
         this.cfg = plugin.getConfigModule();
         this.type = resolveType(cfg);
+        this.asyncDb = new java.util.concurrent.ThreadPoolExecutor(
+                2, 8, 30, java.util.concurrent.TimeUnit.SECONDS,
+                new java.util.concurrent.ArrayBlockingQueue<>(5000),
+                r -> {
+                    Thread t = new Thread(r, "saryulib-db-async");
+                    t.setDaemon(true);
+                    return t;
+                },
+                (r, executor) -> {
+                    if (executor.isShutdown()) return;
+                    Runnable dropped = executor.getQueue().poll();
+                    droppedWrites.incrementAndGet();
+                    if (dropped != null) {
+                        plugin.getLogger().warning("Database write queue full; discarded the oldest pending write.");
+                    }
+                    try {
+                        executor.execute(r);
+                    } catch (java.util.concurrent.RejectedExecutionException ignored) {
+                    }
+                });
         init();
     }
 
@@ -136,10 +159,23 @@ public class DatabaseModule {
         int pool = cfg.getInt("database.pool-size", 10);
 
         HikariConfig hc = new HikariConfig();
+        // Never accept a raw JDBC URL from config. The driver/host/port/db are
+        // assembled here, and dangerous connector options stay disabled.
         hc.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + database
-                + "?useSSL=" + ssl + "&allowPublicKeyRetrieval=true&serverTimezone=UTC");
+                + "?useSSL=" + ssl
+                + (ssl ? "&sslMode=REQUIRED" : "&sslMode=DISABLED")
+                + "&allowPublicKeyRetrieval=false"
+                + "&allowMultiQueries=false"
+                + "&allowLoadLocalInfile=false"
+                + "&allowUrlInLocalInfile=false"
+                + "&autoDeserialize=false"
+                + "&serverTimezone=UTC");
         hc.setUsername(user);
         hc.setPassword(password);
+        hc.addDataSourceProperty("allowMultiQueries", "false");
+        hc.addDataSourceProperty("allowLoadLocalInfile", "false");
+        hc.addDataSourceProperty("allowUrlInLocalInfile", "false");
+        hc.addDataSourceProperty("autoDeserialize", "false");
         hc.setMaximumPoolSize(pool);
         hc.setConnectionTimeout(5000);
         hc.setIdleTimeout(300000);
@@ -186,6 +222,12 @@ public class DatabaseModule {
                 applySchemaV1(c);
                 setSchemaVersion(c, 1);
                 schemaVersion = 1;
+                current = 1;
+            }
+            if (current < 2) {
+                applySchemaV2(c);
+                setSchemaVersion(c, 2);
+                schemaVersion = 2;
             }
         } catch (SQLException e) {
             plugin.getLogger().log(Level.WARNING, "Migration failed", e);
@@ -313,6 +355,74 @@ public class DatabaseModule {
                 plugin.getLogger().log(Level.FINE, "Schema statement skipped: " + sql + " (" + e.getMessage() + ")");
             }
         }
+    }
+
+    /**
+     * v2: v7 plugin identity cache, LuckPerms conflicts, and security audit
+     * findings. All statements are additive; existing v1 data is untouched.
+     */
+    private void applySchemaV2(Connection c) {
+        String id = idColumn();
+        String idx = indexKeyword();
+        String[] stmts = {
+            "CREATE TABLE IF NOT EXISTS acm_plugin_identity ("
+            + "plugin_name TEXT PRIMARY KEY,"
+            + "jar_hash TEXT,"
+            + "jar_hash_sha512 TEXT,"
+            + "source TEXT,"
+            + "project_slug TEXT,"
+            + "project_title TEXT,"
+            + "categories TEXT,"
+            + "project_version TEXT,"
+            + "verified INTEGER NOT NULL DEFAULT 0,"
+            + "confidence INTEGER NOT NULL DEFAULT 0,"
+            + "fetched_at BIGINT NOT NULL DEFAULT 0,"
+            + "expires_at BIGINT NOT NULL DEFAULT 0)",
+
+            "CREATE TABLE IF NOT EXISTS acm_conflicts ("
+            + id + ","
+            + "command TEXT NOT NULL,"
+            + "group_name TEXT NOT NULL,"
+            + "permission TEXT,"
+            + "severity TEXT NOT NULL DEFAULT 'INFO',"
+            + "source TEXT,"
+            + "first_seen BIGINT NOT NULL,"
+            + "last_seen BIGINT NOT NULL,"
+            + "status TEXT NOT NULL DEFAULT 'OPEN',"
+            + "notes TEXT,"
+            + "UNIQUE(command, group_name, permission))",
+            "CREATE INDEX " + idx + "idx_acm_conflicts_status ON acm_conflicts(status)",
+
+            "CREATE TABLE IF NOT EXISTS acm_audit_findings ("
+            + id + ","
+            + "subject_type TEXT NOT NULL,"
+            + "subject_name TEXT NOT NULL,"
+            + "node TEXT NOT NULL,"
+            + "origin TEXT,"
+            + "severity TEXT NOT NULL DEFAULT 'INFO',"
+            + "status TEXT NOT NULL DEFAULT 'OPEN',"
+            + "first_seen BIGINT NOT NULL,"
+            + "last_seen BIGINT NOT NULL,"
+            + "note TEXT,"
+            + "expires_at BIGINT,"
+            + "UNIQUE(subject_type, subject_name, node))",
+            "CREATE INDEX " + idx + "idx_acm_audit_findings_status ON acm_audit_findings(status)"
+        };
+        for (String sql : stmts) {
+            try (Statement stmt = c.createStatement()) {
+                stmt.execute(sql);
+            } catch (SQLException e) {
+                plugin.getLogger().log(Level.FINE, "Schema v2 statement skipped: " + sql + " (" + e.getMessage() + ")");
+            }
+        }
+    }
+
+    public long getDroppedWriteCount() {
+        return droppedWrites.get();
+    }
+
+    public int getPendingWriteCount() {
+        return asyncDb instanceof java.util.concurrent.ThreadPoolExecutor pool ? pool.getQueue().size() : 0;
     }
 
     public @NotNull DataSource getDataSource() {
