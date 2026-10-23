@@ -119,11 +119,13 @@ public class AlertManager {
         vars.put("PLAYER", placeholder.unparsed(player.getName()));
         vars.put("CMDBLACKLIST", placeholder.unparsed(matchedCommand));
         vars.put("NAMESERVER", serverName);
-        vars.put("INPUT", placeholder.unparsed(rawInput));
+        vars.put("INPUT", placeholder.unparsed(truncate(rawInput, 160)));
+        vars.put("FULLCOMMAND", placeholder.unparsed(truncate(rawInput, 160)));
+        vars.put("SUBCOMMAND", placeholder.unparsed(extractSubcommand(rawInput, matchedCommand)));
         vars.put("TIME", timeUtil.formatNow(timezone));
         vars.put("WORLD", placeholder.unparsed(world));
         var entry = plugin.getBlacklist().findEntry(matchedCommand);
-        vars.put("SOURCE", entry != null ? entry.source.name() : "MANUAL");
+        vars.put("SOURCE", entry != null ? entry.sourceLabel() : "MANUAL");
 
         String rawTemplate = templateCache.getOrDefault(template, templateCache.get("boxed"));
         Set<Player> recipients = getRecipients(player);
@@ -164,6 +166,24 @@ public class AlertManager {
             } catch (Exception ignored) {
             }
         }
+    }
+
+    private @NotNull String truncate(@NotNull String value, int max) {
+        String sanitized = id.saryu.libcore.util.StringSanitizer.normalize(value);
+        if (sanitized.length() <= max) return sanitized;
+        return sanitized.substring(0, Math.max(0, max - 3)) + "...";
+    }
+
+    /**
+     * The actual argument tail after the command label, bounded before it is
+     * inserted into an alert template. Falls back to the matched entry.
+     */
+    private @NotNull String extractSubcommand(@NotNull String rawInput, @NotNull String matchedCommand) {
+        String norm = id.saryu.libcore.util.StringSanitizer.normalize(rawInput);
+        int space = norm.indexOf(' ');
+        String value = space >= 0 && space + 1 < norm.length()
+                ? norm.substring(space + 1) : matchedCommand;
+        return truncate(value, 96);
     }
 
     private @NotNull Set<Player> getRecipients(@NotNull Player triggerPlayer) {
@@ -225,6 +245,8 @@ public class AlertManager {
         vars.put("CMDBLACKLIST", "gamemode");
         vars.put("NAMESERVER", serverName);
         vars.put("INPUT", "/gamemode creative Steve");
+        vars.put("FULLCOMMAND", "/gamemode creative Steve");
+        vars.put("SUBCOMMAND", "creative Steve");
         vars.put("TIME", timeUtil.formatNow(timezone));
         vars.put("WORLD", "world");
         vars.put("SOURCE", "PLUGIN_SCAN");

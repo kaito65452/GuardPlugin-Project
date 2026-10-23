@@ -245,7 +245,14 @@ public class CommandFramework {
 
         private void sendUsage(CommandSender sender, String label) {
             messages.usage(sender, label, "/" + label + " <subcommand>");
-            messages.subcommands(sender, label, subCommands.keySet());
+            List<String> visible = new ArrayList<>();
+            for (Map.Entry<String, SubCommand> entry : subCommands.entrySet()) {
+                SubCommand sc = entry.getValue();
+                if (sc.permission().isEmpty() || sender.hasPermission(sc.permission())) {
+                    visible.add(entry.getKey());
+                }
+            }
+            messages.subcommands(sender, label, visible);
         }
 
         /**

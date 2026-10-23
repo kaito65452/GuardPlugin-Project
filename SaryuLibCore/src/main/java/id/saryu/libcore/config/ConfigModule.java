@@ -26,7 +26,7 @@ import org.jetbrains.annotations.Nullable;
  */
 public class ConfigModule {
 
-    private static final int CURRENT_CONFIG_VERSION = 3;
+    private static final int CURRENT_CONFIG_VERSION = 4;
     private static final java.util.regex.Pattern ENV_PATTERN =
             java.util.regex.Pattern.compile("\\$\\{env:([A-Za-z_][A-Za-z0-9_]*)}");
 
@@ -240,8 +240,8 @@ public class ConfigModule {
 
     /**
      * Add keys introduced by newer versions without overwriting any user value.
-     * Version 1 is the original layout; versions 2-3 add v7
-     * security/scan/audit/plugin-identity sections. Comments in the user's file are preserved because we only write
+     * Version 1 is the original layout; versions 2-4 add v7
+     * security/scan/audit/plugin-identity, command action and integration sections. Comments in the user's file are preserved because we only write
      * when new keys actually have to be added.
      */
     public void migrate() {

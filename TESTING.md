@@ -87,7 +87,8 @@ Already verified:
 |-------|--------|
 | SQLite schema migration to v3 (`acm_blacklist.allowed_groups`) | ✅ |
 | Config v2 → v3 adds `plugin-identity.*`, `audit.*`, `conflict-detection.*` | ✅ |
-| H2 starts (JDBC driver explicitly registered), schema v3 | ✅ |
+| Config v3 → v4 adds `commands`, `plugin-manual-scan`, `integration`, audit risk nodes | ✅ |
+| H2 starts (JDBC driver explicitly registered), schema v3/v4 | ✅ |
 | H2 persists 79 blacklist entries across restart, 0 duplicates | ✅ |
 | MySQL | ⚠️ not available in the current test environment |
 
@@ -109,6 +110,49 @@ Already verified:
    rescanned automatically after the 5-second debounce.
 8. PlaceholderAPI: verify `%acm_violations%`, `%acm_blacklist_count%`, `%acm_bypass%`,
    `%acm_conflicts_open%`, `%acm_conflicts_critical%`, and `%acm_audit_open%`.
+
+## 8b. Command rules and alert actions (config v4)
+
+1. Start a fresh server (or back up and delete `config.yml`), verify `config.version: 4`
+   and the default `commands: "lp info": mode: allow` rule.
+2. `/acm subcmd add block worldguard reload` then `/acm blacklist check WG  reload`
+   → matched by `worldguard reload`, action `block`.
+3. `/acm subcmd add alert-only lp user * permission set`; as EXACT token test:
+   `/acm blacklist check lp user Steve permission set` → action `alert-only`; the
+   player receives an alert but the command still executes.
+4. `/acm subcmd add allow test safe`; `/acm blacklist check test safe` → explicit allow;
+   `/acm blacklist check test safe extra` still matches the allow prefix.
+5. `/acm subcmd remove test safe`, `/acm subcmd list`, `/acm reload` → rules persist.
+6. Verify `{SUBCOMMAND}` and `{FULLCOMMAND}` in alerts are sanitized (no `§`,
+   zero-width, newlines) and truncated; `/lp info` remains allowed.
+7. Check `/acm blacklist list` shows `[MODE/ACTION]` and `/acm blacklist info` has `action`.
+
+## 8c. Sensitive plugin manual scan and WE/FAWE/WG
+
+1. Install WorldEdit + WorldGuard (FAWE optionally, not together with WE) and add the
+   plugin names under `plugin-manual-scan:` in `config.yml`.
+2. `/acm scan WorldEdit` → command/alias/permission/listener counts. If it is in
+   `plugin-manual-scan`, `/acm blacklist check //SET stone` → `set` from
+   `manual-scan:WorldEdit`; `/acm scan <not-configured>` is preview-only.
+3. `/acm scan list` → mapping source is `manual-scan:<plugin>` or `integration`.
+4. `/acm integration status` → WE/FAWE/WG version, command counts, warnings, recommendations.
+5. `/acm integration apply worldguard` → writes `wg reload`, `rg flag`, etc. to
+   `commands:`; `/acm integration apply worldedit` → `set`, `schem load`, ...
+   Rules already present are skipped; nothing is applied without this command.
+6. `/acm blacklist check worldguard:wg reload` → blocked via `wg reload`.
+7. `/acm blacklist check rg flag spawn pvp allow` → blocked via `rg flag`.
+8. `/acm blacklist check lp info` → allowed (no match or explicit allow).
+9. With PlugManX: `/plugman disable WorldEdit`, wait for the rescan → manual-scan rows
+   for WorldEdit become disabled; `/acm scan list` shows 0 commands. Re-enable it →
+   PluginEnableEvent rescans and the rows become enabled again.
+10. Remove a plugin from `plugin-manual-scan`, `/acm reload`, wait for the scan → its
+    manual-scan rows are disabled (not deleted); `/acm scan list` no longer lists it.
+11. Missing plugin names warn once and retry when that plugin is enabled.
+12. Read-only audit: set a dangerous WE/WG limit (`max-radius: -1`) and verify
+    `/acm integration status` warns without writing the other plugin's config.
+13. LuckPerms: give a non-staff group `worldedit.*` or `worldguard.region.bypass.*`,
+    run `/acm audit`; expect HIGH/CRITICAL findings, while a configured staff group is
+    marked `[staff-group]`. Confirm no `worldedit.*` command is executed by ACM.
 
 ## 12a. Build and test checks
 
@@ -181,10 +225,15 @@ Automated console runs confirmed (V7 additions were smoke-tested on Paper 1.21.8
 | PacketEvents 2.14.0 hook (`PacketEvents`, active) | ✅ |
 | PacketEvents absent → no-op layer, no errors | ✅ |
 | V7 `/acm help`, `info`, `security`, `conflicts`, `audit`, `plugins`, `reload` | ✅ Paper 1.21.8 |
-| Config v2 → v3 migration adds new keys without overwriting values | ✅ |
+| Config v2 → v3/v4 migration adds new keys without overwriting values | ✅ |
 | `/acm scan identify` + `/acm plugins` with a dummy plugin (`UNVERIFIED`) | ✅ |
 | JAR baseline uses flat file-name keys; hash change warns once | ✅ |
-| H2 schema v3 + persistence across restart | ✅ |
+| H2/SQLite schema v3 → v4 + persistence across restart | ✅ |
+| WE 7.4.6 + WG 7.0.14 detection, 163 WE / 17 WG command labels | ✅ Paper 1.21.8 |
+| `//SET stone` → `set` manual-scan; `WG  reload`, `worldguard:wg reload`, `rg flag` → block | ✅ matcher |
+| `/lp info` allowed; `/acm integration apply worldguard` writes 7 rules | ✅ console |
+| PlugManX disable/enable WorldEdit → 162 rows disabled/re-enabled | ✅ runtime |
+| Read-only WE config warning (`max-radius: -1`) | ✅ |
 | `./gradlew test` (JUnit 5) and `scanForbiddenApis` | ✅ |
 | LuckPerms event-triggered rescan | ⚠️ needs LuckPerms installed |
 | PlaceholderAPI placeholders | ⚠️ needs PlaceholderAPI installed |

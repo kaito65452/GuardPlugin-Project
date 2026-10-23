@@ -248,6 +248,12 @@ public class DatabaseModule {
                 applySchemaV3(c);
                 setSchemaVersion(c, 3);
                 schemaVersion = 3;
+                current = 3;
+            }
+            if (current < 4) {
+                applySchemaV4(c);
+                setSchemaVersion(c, 4);
+                schemaVersion = 4;
             }
         } catch (SQLException e) {
             plugin.getLogger().log(Level.WARNING, "Migration failed", e);
@@ -319,7 +325,8 @@ public class DatabaseModule {
             + "added_at BIGINT NOT NULL,"
             + "world TEXT,"
             + "group_name TEXT,"
-            + "enabled INTEGER NOT NULL DEFAULT 1)",
+            + "enabled INTEGER NOT NULL DEFAULT 1,"
+            + "action TEXT NOT NULL DEFAULT 'BLOCK')",
             "CREATE INDEX " + idx + "idx_acm_blacklist_command ON acm_blacklist(command)",
 
             // Violations log.
@@ -452,6 +459,23 @@ public class DatabaseModule {
                 // Most commonly the column already exists (manual migration or a
                 // previous partial run); this migration must remain idempotent.
                 plugin.getLogger().log(Level.FINE, "Schema v3 statement skipped: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * v4: per-entry action (BLOCK, ALERT_ONLY, ALLOW). Existing rows default to
+     * BLOCK, preserving previous behavior. Additive and idempotent.
+     */
+    private void applySchemaV4(Connection c) {
+        String[] stmts = {
+            "ALTER TABLE acm_blacklist ADD COLUMN action TEXT NOT NULL DEFAULT 'BLOCK'"
+        };
+        for (String sql : stmts) {
+            try (Statement stmt = c.createStatement()) {
+                stmt.execute(sql);
+            } catch (SQLException e) {
+                plugin.getLogger().log(Level.FINE, "Schema v4 statement skipped: " + e.getMessage());
             }
         }
     }

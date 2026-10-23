@@ -243,13 +243,15 @@ public class Storage {
         try (Statement st = c.createStatement();
              ResultSet rs = st.executeQuery(
                      "SELECT id, command, match_mode, source, plugin_name, permission, reason, "
-                     + "added_by, added_at, world, group_name, allowed_groups, enabled FROM acm_blacklist WHERE enabled = 1")) {
+                     + "added_by, added_at, world, group_name, allowed_groups, enabled, action "
+                     + "FROM acm_blacklist WHERE enabled = 1")) {
             while (rs.next()) {
                 BlacklistManager.Entry e = new BlacklistManager.Entry();
                 e.id = rs.getInt("id");
                 e.command = rs.getString("command");
                 e.mode = safeMode(rs.getString("match_mode"));
                 e.source = safeSource(rs.getString("source"));
+                e.action = safeAction(rs.getString("action"));
                 e.pluginName = rs.getString("plugin_name");
                 e.permission = rs.getString("permission");
                 e.reason = rs.getString("reason");
@@ -276,11 +278,26 @@ public class Storage {
     }
 
     private BlacklistManager.Source safeSource(String value) {
+        if (value != null && value.toLowerCase(java.util.Locale.ROOT).startsWith("manual-scan:")) {
+            return BlacklistManager.Source.MANUAL_SCAN;
+        }
         try {
             return BlacklistManager.Source.valueOf(value.toUpperCase());
         } catch (Exception e) {
             return BlacklistManager.Source.MANUAL;
         }
+    }
+
+    private BlacklistManager.Action safeAction(String value) {
+        try {
+            return BlacklistManager.Action.valueOf(value.toUpperCase());
+        } catch (Exception e) {
+            return BlacklistManager.Action.BLOCK;
+        }
+    }
+
+    private String sourceValue(@NotNull BlacklistManager.Entry entry) {
+        return entry.sourceLabel();
     }
 
     public @NotNull CompletableFuture<Integer> saveBlacklistEntry(@NotNull BlacklistManager.Entry entry) {
@@ -295,11 +312,12 @@ public class Storage {
     private int saveBlacklistEntrySync(Connection c, BlacklistManager.Entry entry) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
                 "INSERT INTO acm_blacklist (command, match_mode, source, plugin_name, permission, reason, "
-                + "added_by, added_at, world, group_name, allowed_groups, enabled) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                + "added_by, added_at, world, group_name, allowed_groups, enabled, action) "
+                + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, entry.command);
             ps.setString(2, entry.mode.name());
-            ps.setString(3, entry.source.name());
+            ps.setString(3, sourceValue(entry));
             ps.setString(4, entry.pluginName);
             ps.setString(5, entry.permission);
             ps.setString(6, entry.reason);
@@ -309,12 +327,69 @@ public class Storage {
             ps.setString(10, entry.groupName);
             ps.setString(11, joinGroups(entry.allowedGroups));
             ps.setBoolean(12, entry.enabled);
+            ps.setString(13, entry.action == null ? "BLOCK" : entry.action.name());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) return rs.getInt(1);
             }
         }
         return -1;
+    }
+
+    /**
+     * Upsert a manual-scan row by (command, manual-scan:plugin). Reusing the
+     * existing row avoids duplicate disabled rows when a plugin is re-enabled.
+     */
+    public @NotNull CompletableFuture<Integer> upsertManualScanEntry(@NotNull BlacklistManager.Entry entry) {
+        if (!db().isAvailable()) return CompletableFuture.completedFuture(-1);
+        return db().async(c -> {
+            String source = sourceValue(entry);
+            int id = -1;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT id FROM acm_blacklist WHERE command = ? AND source = ? ORDER BY enabled DESC, id ASC")) {
+                ps.setString(1, entry.command);
+                ps.setString(2, source);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) id = rs.getInt(1);
+                }
+            }
+            if (id > 0) {
+                try (PreparedStatement ps = c.prepareStatement(
+                        "UPDATE acm_blacklist SET match_mode = ?, plugin_name = ?, permission = ?, reason = ?, "
+                        + "added_by = ?, added_at = ?, world = ?, group_name = ?, allowed_groups = ?, "
+                        + "enabled = 1, action = ? WHERE id = ?")) {
+                    ps.setString(1, entry.mode.name());
+                    ps.setString(2, entry.pluginName);
+                    ps.setString(3, entry.permission);
+                    ps.setString(4, entry.reason);
+                    ps.setString(5, entry.addedBy);
+                    ps.setLong(6, entry.addedAt);
+                    ps.setString(7, entry.world);
+                    ps.setString(8, entry.groupName);
+                    ps.setString(9, joinGroups(entry.allowedGroups));
+                    ps.setString(10, entry.action == null ? "BLOCK" : entry.action.name());
+                    ps.setInt(11, id);
+                    ps.executeUpdate();
+                }
+                return id;
+            }
+            return saveBlacklistEntrySync(c, entry);
+        }).exceptionally(ex -> {
+            plugin.getLogger().log(Level.FINE, "Manual-scan persist failed", ex);
+            return -1;
+        });
+    }
+
+    public @NotNull CompletableFuture<Void> setBlacklistEntryEnabled(int id, boolean enabled) {
+        if (!db().isAvailable() || id <= 0) return CompletableFuture.completedFuture(null);
+        return db().asyncVoid(c -> {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE acm_blacklist SET enabled = ? WHERE id = ?")) {
+                ps.setBoolean(1, enabled);
+                ps.setInt(2, id);
+                ps.executeUpdate();
+            }
+        }).exceptionally(ex -> null);
     }
 
     public @NotNull CompletableFuture<Void> updateAllowedGroups(int id, @NotNull List<String> groups) {

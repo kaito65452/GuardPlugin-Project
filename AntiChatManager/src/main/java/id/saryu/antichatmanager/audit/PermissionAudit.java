@@ -11,6 +11,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -43,6 +44,10 @@ public class PermissionAudit {
     private final Set<String> ignoreGroups = new HashSet<>();
     private final Set<String> ignoreUsers = new HashSet<>();
     private final Set<String> ignorePerms = new HashSet<>();
+    private final Set<String> staffGroups = new HashSet<>();
+    private final Set<String> riskyPluginPerms = new HashSet<>(Set.of(
+            "worldedit.*", "worldguard.*", "worldguard.region.bypass.*", "fawe.*",
+            "worldedit.", "worldguard.region.bypass.", "fawe."));
     private final Set<String> dangerous = new HashSet<>(Set.of(
             "op", "deop", "stop", "reload", "execute", "gamemode", "give", "ban", "kick", "lp", "luckperms"));
 
@@ -61,9 +66,14 @@ public class PermissionAudit {
         ignoreGroups.clear();
         ignoreUsers.clear();
         ignorePerms.clear();
+        staffGroups.clear();
         ignoreGroups.addAll(lower(plugin.getConfigModule().getStringList("audit.ignore-groups")));
         ignoreUsers.addAll(lower(plugin.getConfigModule().getStringList("audit.ignore-users")));
         ignorePerms.addAll(lower(plugin.getConfigModule().getStringList("audit.ignore-permissions")));
+        staffGroups.addAll(lower(plugin.getConfigModule().getStringList("audit.staff-groups")));
+        for (String node : plugin.getConfigModule().getStringList("audit.plugin-permissions")) {
+            if (node != null && !node.isBlank()) riskyPluginPerms.add(node.toLowerCase(Locale.ROOT));
+        }
     }
 
     private Set<String> lower(List<String> values) {
@@ -167,6 +177,31 @@ public class PermissionAudit {
                     }
                 }
             }
+            // WorldEdit/FAWE/WorldGuard administration permissions. These are
+            // high impact even when no command is currently blacklisted.
+            Set<String> pluginNodes = new LinkedHashSet<>();
+            for (String node : riskyPluginPerms) {
+                if (isIgnoredPermission(node)) continue;
+                for (Map.Entry<String, Boolean> granted : h.nodes.entrySet()) {
+                    if (granted.getKey() == null || !Boolean.TRUE.equals(granted.getValue())) continue;
+                    String key = granted.getKey().toLowerCase(Locale.ROOT);
+                    boolean match = key.equals(node)
+                            || (node.endsWith(".*") && key.startsWith(node.substring(0, node.length() - 1)))
+                            || (node.endsWith(".") && key.startsWith(node));
+                    if (match) pluginNodes.add(key);
+                }
+                if (h.grants(node)) pluginNodes.add(node);
+            }
+            for (String node : pluginNodes) {
+                if (isIgnoredPermission(node)) continue;
+                boolean staff = h.type.equals("GROUP") && staffGroups.contains(h.name.toLowerCase(Locale.ROOT));
+                Risk r = staff ? Risk.HIGH : Risk.CRITICAL;
+                String origin = "luckperms:" + h.type.toLowerCase(Locale.ROOT) + ":" + h.name
+                        + " (weight=" + h.weight + ", primary=" + h.primaryGroup + ")"
+                        + (staff ? " [staff-group]" : " [non-staff]");
+                record(h, node, origin, r, seen);
+            }
+
             // Direct permission for blacklisted commands
             for (BlacklistManager.Entry entry : plugin.getBlacklist().getAllEntries()) {
                 if (entry == null || entry.permission == null || entry.permission.isBlank()) continue;
@@ -181,6 +216,19 @@ public class PermissionAudit {
                 record(h, entry.permission, "blacklist:" + entry.source.name(), r, seen);
             }
         }
+    }
+
+    private boolean isIgnoredPermission(String node) {
+        if (node == null) return false;
+        String value = node.toLowerCase(Locale.ROOT);
+        if (ignorePerms.contains(value)) return true;
+        for (String ignored : ignorePerms) {
+            if (ignored.endsWith(".*")) {
+                String prefix = ignored.substring(0, ignored.length() - 1);
+                if (value.startsWith(prefix)) return true;
+            }
+        }
+        return false;
     }
 
     private void record(PermissionModule.HolderSnapshot h, String node, String origin, Risk risk, Set<String> seen) {

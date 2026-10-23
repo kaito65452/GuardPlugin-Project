@@ -1,6 +1,7 @@
 package id.saryu.antichatmanager.packet;
 
 import id.saryu.antichatmanager.AntiChatManager;
+import id.saryu.antichatmanager.blacklist.BlacklistManager;
 import id.saryu.libcore.packet.PacketLayer;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
@@ -27,19 +28,26 @@ public class PacketInterceptor implements PacketLayer.CommandInterceptor {
         if (!plugin.getConfigModule().getBoolean("blacklist.enabled", true)) return false;
 
         int max = plugin.maxCommandLength();
-        String matched;
         if (max > 0 && command.length() > max) {
-            matched = "command-too-long";
-        } else {
-            matched = plugin.getBlacklist().matchWithNested(command);
+            String raw = command.length() > 256 ? command.substring(0, 256) : command;
+            plugin.getLib().getSchedulerModule().runSync(() ->
+                    plugin.getCommandHandler().onBlockedCommand(player, raw, "command-too-long", "packet"));
+            return true;
         }
-        if (matched == null) return false;
-        if (!"command-too-long".equals(matched) && plugin.getBlacklist().isAllowedFor(player, matched)) return false;
+        BlacklistManager.MatchResult result = plugin.getBlacklist().resolveWithNested(command);
+        if (result == null || result.isAllow()) return false;
+        if (plugin.getBlacklist().isAllowedFor(player, result.command)) return false;
 
-        final String matchedCommand = matched;
+        final String matchedCommand = result.command;
         final String raw = command.length() > 256 ? command.substring(0, 256) : command;
+        if (result.isBlock()) {
+            plugin.getLib().getSchedulerModule().runSync(() ->
+                    plugin.getCommandHandler().onBlockedCommand(player, raw, matchedCommand, "packet"));
+            return true;
+        }
+        // ALERT_ONLY: let the command execute, but notify staff asynchronously.
         plugin.getLib().getSchedulerModule().runSync(() ->
-                plugin.getCommandHandler().onBlockedCommand(player, raw, matchedCommand, "packet"));
-        return true;
+                plugin.getCommandHandler().onAlertOnly(player, raw, matchedCommand, "packet"));
+        return false;
     }
 }

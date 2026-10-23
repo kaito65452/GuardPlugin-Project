@@ -7,6 +7,7 @@ import id.saryu.antichatmanager.command.ACMCommand;
 import id.saryu.antichatmanager.command.CommandHandler;
 import id.saryu.antichatmanager.conflict.ConflictDetector;
 import id.saryu.antichatmanager.identity.PluginIdentityService;
+import id.saryu.antichatmanager.integration.PluginIntegrationService;
 import id.saryu.antichatmanager.listener.PlayerListener;
 import id.saryu.antichatmanager.packet.PacketInterceptor;
 import id.saryu.antichatmanager.punishment.PunishmentTracker;
@@ -54,6 +55,7 @@ public class AntiChatManager extends JavaPlugin {
     private PluginIdentityService pluginIdentityService;
     private ConflictDetector conflictDetector;
     private PermissionAudit permissionAudit;
+    private PluginIntegrationService pluginIntegrationService;
     private SecurityAudit securityAudit;
     private AuditLog auditLog;
     private PacketInterceptor packetInterceptor;
@@ -109,6 +111,7 @@ public class AntiChatManager extends JavaPlugin {
         pluginIdentityService = new PluginIdentityService(this);
         conflictDetector = new ConflictDetector(this);
         permissionAudit = new PermissionAudit(this);
+        pluginIntegrationService = new PluginIntegrationService(this);
         securityAudit = new SecurityAudit(this);
         auditLog = new AuditLog(this);
         securityAudit.runStartupAudit();
@@ -128,6 +131,7 @@ public class AntiChatManager extends JavaPlugin {
         pluginIdentityService.start();
         conflictDetector.start();
         permissionAudit.start();
+        pluginIntegrationService.start();
         registerLuckPermsListener();
 
         if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
@@ -139,6 +143,7 @@ public class AntiChatManager extends JavaPlugin {
         }
 
         Bukkit.getPluginManager().registerEvents(playerListener, this);
+        Bukkit.getPluginManager().registerEvents(pluginIntegrationService, this);
 
         getLogger().info("AntiChatManager " + buildInfo.display() + " enabled. "
                 + "Database=" + lib.getDatabaseModule().getType()
@@ -152,6 +157,7 @@ public class AntiChatManager extends JavaPlugin {
         if (pluginIdentityService != null) pluginIdentityService.stop();
         if (conflictDetector != null) conflictDetector.stop();
         if (permissionAudit != null) permissionAudit.stop();
+        if (pluginIntegrationService != null) pluginIntegrationService.stop();
         if (lib != null) lib.getPermissionModule().unregisterChangeListeners();
         if (packetInterceptor != null && lib != null) {
             lib.getPacketLayer().unregisterCommandInterceptor(packetInterceptor);
@@ -185,6 +191,7 @@ public class AntiChatManager extends JavaPlugin {
     public PluginIdentityService getPluginIdentityService() { return pluginIdentityService; }
     public ConflictDetector getConflictDetector() { return conflictDetector; }
     public PermissionAudit getPermissionAudit() { return permissionAudit; }
+    public PluginIntegrationService getPluginIntegrationService() { return pluginIntegrationService; }
     public SecurityAudit getSecurityAudit() { return securityAudit; }
     public AuditLog getAuditLog() { return auditLog; }
     public id.saryu.antichatmanager.api.AntiChatManagerAPI getApi() {
@@ -224,6 +231,8 @@ public class AntiChatManager extends JavaPlugin {
         pluginIdentityService.reloadConfig();
         conflictDetector.reloadConfig();
         permissionAudit.reloadConfig();
+        pluginIntegrationService.reloadConfig();
+        pluginIntegrationService.scanAsync(null);
     }
     public PacketInterceptor getPacketInterceptor() { return packetInterceptor; }
     public PlayerListener getPlayerListener() { return playerListener; }
