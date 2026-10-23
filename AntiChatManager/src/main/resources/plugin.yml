@@ -6,7 +6,7 @@ description: Advanced chat and command management with blacklist, auto-scan, ale
 author: Saryu
 website: https://github.com/saryu
 depend: [SaryuLibCore]
-softdepend: [LuckPerms, PlaceholderAPI, Floodgate, PacketEvents]
+softdepend: [LuckPerms, PlaceholderAPI, Floodgate, PacketEvents, WorldEdit, FastAsyncWorldEdit, WorldGuard]
 load: POSTWORLD
 
 commands:
@@ -14,12 +14,19 @@ commands:
     description: AntiChatManager administration command.
     usage: /acm help
     aliases: [antichatmanager]
-    permission: saryuantichatmanager.admin
-    permission-message: You do not have permission to use AntiChatManager.
+    # Per-subcommand permissions are enforced by the command framework. The
+    # root command itself stays unrestricted so dedicated admin permissions
+    # (integration/subcmd) can be granted without full /acm access.
 
 permissions:
   saryuantichatmanager.admin:
     description: Full access to /acm and all management subcommands.
+    default: op
+  saryuantichatmanager.integration.admin:
+    description: Use /acm integration status, scan, reload and apply.
+    default: op
+  saryuantichatmanager.subcmd.admin:
+    description: Manage command/subcommand blacklist rules.
     default: op
   saryuantichatmanager.bypass:
     description: Bypass the command blacklist and see all commands in tab completion.

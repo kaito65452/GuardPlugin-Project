@@ -54,7 +54,9 @@ public class ACMCommand {
     }
 
     public void register(@NotNull CommandFramework framework) {
-        CommandFramework.Root root = framework.root("acm", PERM_ADMIN,
+        // Subcommands enforce their own permissions. This allows dedicated
+        // integration/subcmd administrators without granting full /acm access.
+        CommandFramework.Root root = framework.root("acm", "",
                 "AntiChatManager administration");
         root.register(new HelpSub());
         root.register(new ReloadSub());
@@ -62,6 +64,8 @@ public class ACMCommand {
         root.register(new ScanSub());
         root.register(new BlacklistSub());
         root.register(new PluginsSub(plugin));
+        root.register(new IntegrationSub(plugin));
+        root.register(new SubcmdSub(plugin));
         root.register(new ConflictsSub(plugin));
         root.register(new AuditSub(plugin));
         root.register(new SecuritySub(plugin));
@@ -322,16 +326,67 @@ public class ACMCommand {
     private final class ScanSub extends Base {
         @Override public @NotNull String name() { return "scan"; }
         @Override public String description() { return "Run or inspect the auto-scan"; }
-        @Override public String usage() { return "/acm scan [report|sources|identify]"; }
+        @Override public String usage() { return "/acm scan [report|sources|identify|list|<plugin>]"; }
 
         @Override
         public @NotNull List<String> tabComplete(@NotNull CommandSender sender, String[] args) {
-            if (args.length == 1) return filter(List.of("report", "sources", "identify"), args[0]);
+            if (args.length == 1) {
+                List<String> options = new ArrayList<>(List.of("report", "sources", "identify", "list"));
+                if (plugin.getPluginIntegrationService() != null) {
+                    options.addAll(plugin.getPluginIntegrationService().getManualPlugins());
+                }
+                return filter(options, args[0]);
+            }
             return List.of();
         }
 
         @Override
         public void execute(CommandSender sender, Command cmd, String label, String[] args) {
+            if (args.length > 0 && args[0].equalsIgnoreCase("list")) {
+                listPluginMappings(sender);
+                return;
+            }
+            if (args.length > 0 && !args[0].equalsIgnoreCase("report")
+                    && !args[0].equalsIgnoreCase("sources")
+                    && !args[0].equalsIgnoreCase("identify")) {
+                String requested = args[0];
+                if (requested.length() > 64 || requested.isBlank()) {
+                    send(sender, "scan.plugin.invalid", "&cInvalid plugin name.");
+                    return;
+                }
+                for (int i = 0; i < requested.length(); i++) {
+                    char c = requested.charAt(i);
+                    if (c < 0x20 || c == 0x7f) {
+                        send(sender, "scan.plugin.invalid", "&cInvalid plugin name.");
+                        return;
+                    }
+                }
+                var service = plugin.getPluginIntegrationService();
+                if (service == null) {
+                    send(sender, "messages.internal-error", "%prefix%&cAn internal error occurred. Check the console.");
+                    return;
+                }
+                send(sender, "scan.plugin.started", "&7Rescanning plugin &f{plugin}&7 asynchronously...",
+                        "plugin", requested);
+                service.scanPluginAsync(requested, mapping -> {
+                    if (mapping == null || !mapping.installed) {
+                        send(sender, "scan.plugin.missing", "&7Plugin &f{plugin} &7is not installed; retry will happen on enable.",
+                                "plugin", requested);
+                        return;
+                    }
+                    boolean configured = service.getManualPlugins().stream()
+                            .anyMatch(n -> n.equalsIgnoreCase(mapping.pluginName));
+                    send(sender, configured ? "scan.plugin.done" : "scan.plugin.preview",
+                            configured
+                                    ? "&aPlugin &f{plugin} &amapped: commands={commands}, permissions={permissions}, listeners={listeners}."
+                                    : "&7Plugin &f{plugin} &7mapped (not in plugin-manual-scan; preview only): commands={commands}, permissions={permissions}, listeners={listeners}.",
+                            "plugin", mapping.pluginName,
+                            "commands", String.valueOf(mapping.commands.size()),
+                            "permissions", String.valueOf(mapping.permissions.size()),
+                            "listeners", String.valueOf(mapping.listeners.size()));
+                });
+                return;
+            }
             if (args.length > 0 && args[0].equalsIgnoreCase("identify")) {
                 if (plugin.getPluginIdentityService() == null) {
                     send(sender, "messages.internal-error", "%prefix%&cAn internal error occurred. Check the console.");
@@ -379,6 +434,44 @@ public class ACMCommand {
             plugin.getAutoScanner().scanNow();
             send(sender, "scan.done", "&aScan finished: &f{count}&a blacklist entries total.",
                     "count", plugin.getBlacklist().count(null));
+        }
+
+        private void listPluginMappings(CommandSender sender) {
+            var service = plugin.getPluginIntegrationService();
+            if (service == null || service.getMappings().isEmpty()) {
+                send(sender, "scan.list.empty", "&7No plugin mappings yet. Run &f/acm scan <plugin>&7.");
+                return;
+            }
+            sendRaw(sender, "scan.list.header", "&b=== Plugin Mapping Results ===");
+            for (var mapping : service.getMappings()) {
+                boolean manual = service.getManualPlugins().stream()
+                        .anyMatch(n -> n.equalsIgnoreCase(mapping.pluginName));
+                String source = manual ? "manual-scan:" + mapping.pluginName
+                        : (mapping.installed ? "integration" : "manual-scan:" + mapping.pluginName);
+                sendRaw(sender, "scan.list.plugin",
+                        "&7- &f{plugin} &8v{version} &7installed={installed} source={source}",
+                        "plugin", mapping.pluginName, "version", mapping.version,
+                        "installed", String.valueOf(mapping.installed), "source", source);
+                List<String> commands = new ArrayList<>(mapping.commands);
+                String sample = commands.isEmpty() ? "-"
+                        : String.join(", ", commands.subList(0, Math.min(12, commands.size())))
+                        + (commands.size() > 12 ? " ..." : "");
+                sendRaw(sender, "scan.list.commands", "&8    commands({count}): &7{commands}",
+                        "count", commands.size(), "commands", sample);
+                List<String> perms = new ArrayList<>(mapping.permissions);
+                String permSample = perms.isEmpty() ? "-"
+                        : String.join(", ", perms.subList(0, Math.min(8, perms.size())))
+                        + (perms.size() > 8 ? " ..." : "");
+                sendRaw(sender, "scan.list.permissions", "&8    permissions({count}): &7{permissions}",
+                        "count", perms.size(), "permissions", permSample);
+                if (!mapping.listeners.isEmpty()) {
+                    sendRaw(sender, "scan.list.listeners", "&8    listeners: &7{listeners}",
+                            "listeners", String.join(", ", mapping.listeners));
+                }
+                for (String warning : mapping.warnings) {
+                    sendRaw(sender, "scan.list.warning", "&8    ! &7{warning}", "warning", warning);
+                }
+            }
         }
     }
 
@@ -483,11 +576,12 @@ public class ACMCommand {
                     "page", page, "total", pages, "count", total);
             for (BlacklistManager.Entry e : entries) {
                 sendRaw(sender, "blacklist.list.entry",
-                        "&7#{id} &f{command} &7[{mode}] &8source={source} plugin={plugin} added_by={addedby}",
+                        "&7#{id} &f{command} &7[{mode}/{action}] &8source={source} plugin={plugin} added_by={addedby}",
                         "id", displayId(e.id),
                         "command", e.command,
                         "mode", e.mode,
-                        "source", e.source,
+                        "action", e.action == null ? "BLOCK" : e.action.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-'),
+                        "source", e.sourceLabel(),
                         "plugin", e.pluginName == null ? "-" : e.pluginName,
                         "addedby", e.addedBy == null ? "-" : e.addedBy);
             }
@@ -501,19 +595,24 @@ public class ACMCommand {
                 send(sender, "blacklist.check.usage", "&7Usage: &f/acm blacklist check <command>");
                 return;
             }
-            String command = normalizeInput(args[1]);
-            String matched = plugin.getBlacklist().match(command);
-            if (matched == null) {
+            String command = normalizeInput(joinArgs(args, 1));
+            BlacklistManager.MatchResult result = plugin.getBlacklist().resolve(command);
+            if (result == null) {
                 send(sender, "blacklist.check.free", "&a&f{command} &ais not blacklisted.",
                         "command", command);
                 return;
             }
-            BlacklistManager.Entry entry = plugin.getBlacklist().findEntry(command);
+            if (result.isAllow()) {
+                send(sender, "blacklist.check.allowed",
+                        "%prefix%&a&f{command} &ahas an explicit allow rule.", "command", command);
+                printEntry(sender, result.entry);
+                return;
+            }
             sendRaw(sender, "blacklist.check.title", "&b=== Blacklist Check: &f{command}",
                     "command", command);
-            sendRaw(sender, "blacklist.check.matched", "&7Matched: &f{matched}", "matched", matched);
-            if (entry != null) {
-                printEntry(sender, entry);
+            sendRaw(sender, "blacklist.check.matched", "&7Matched: &f{matched}", "matched", result.command);
+            if (result.entry != null) {
+                printEntry(sender, result.entry);
             }
         }
 
@@ -526,7 +625,7 @@ public class ACMCommand {
             if (isInt(args[1])) {
                 entry = plugin.getBlacklist().getEntry(Integer.parseInt(args[1]));
             } else {
-                entry = plugin.getBlacklist().findEntry(normalizeInput(args[1]));
+                entry = plugin.getBlacklist().findEntry(normalizeInput(joinArgs(args, 1)));
             }
             if (entry == null) {
                 send(sender, "blacklist.notfound", "&cNo blacklist entry found for &7{command}.",
@@ -541,7 +640,9 @@ public class ACMCommand {
         private void printEntry(CommandSender sender, BlacklistManager.Entry entry) {
             line(sender, "blacklist.field.command", "command", entry.command);
             line(sender, "blacklist.field.mode", "mode", entry.mode);
-            line(sender, "blacklist.field.source", "source", entry.source);
+            line(sender, "blacklist.field.action", "action",
+                    entry.action == null ? "BLOCK" : entry.action.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-'));
+            line(sender, "blacklist.field.source", "source", entry.sourceLabel());
             line(sender, "blacklist.field.plugin", "plugin",
                     entry.pluginName == null ? "-" : entry.pluginName);
             line(sender, "blacklist.field.permission", "permission",
@@ -591,7 +692,7 @@ public class ACMCommand {
             }
             BlacklistManager.Entry entry = new BlacklistManager.Entry();
             entry.command = command;
-            entry.normalized = StringSanitizer.normalize(command);
+            entry.normalized = plugin.getBlacklist().canonicalize(command);
             entry.mode = mode;
             entry.source = BlacklistManager.Source.MANUAL;
             entry.reason = reason.length() == 0
@@ -615,7 +716,7 @@ public class ACMCommand {
             if (isInt(args[1])) {
                 removed = plugin.getBlacklist().removeEntry(Integer.parseInt(args[1])) ? 1 : 0;
             } else {
-                removed = plugin.getBlacklist().removeByCommand(normalizeInput(args[1]), null);
+                removed = plugin.getBlacklist().removeByCommand(normalizeInput(joinArgs(args, 1)), null);
             }
             if (removed == 0) {
                 send(sender, "blacklist.notfound", "&cNo blacklist entry found for &7{command}.",
@@ -999,7 +1100,8 @@ public class ACMCommand {
                     Map<String, Object> map = new java.util.LinkedHashMap<>();
                     map.put("command", e.command);
                     map.put("mode", e.mode.name());
-                    map.put("source", e.source.name());
+                    map.put("source", e.sourceLabel());
+                    map.put("action", e.action.name());
                     if (e.pluginName != null) map.put("plugin", e.pluginName);
                     if (e.permission != null) map.put("permission", e.permission);
                     if (e.reason != null) map.put("reason", e.reason);
@@ -1078,7 +1180,7 @@ public class ACMCommand {
                     }
                     BlacklistManager.Entry e = new BlacklistManager.Entry();
                     e.command = command;
-                    e.normalized = StringSanitizer.normalize(command);
+                    e.normalized = plugin.getBlacklist().canonicalize(command);
                     try {
                         Object modeObj = map.get("mode");
                         e.mode = BlacklistManager.MatchMode.valueOf(
@@ -1091,6 +1193,8 @@ public class ACMCommand {
                         continue;
                     }
                     e.source = BlacklistManager.Source.IMPORT;
+                    e.action = BlacklistManager.Action.parse(map.get("action") == null
+                            ? "block" : String.valueOf(map.get("action")));
                     e.pluginName = map.get("plugin") != null ? String.valueOf(map.get("plugin")) : null;
                     e.permission = map.get("permission") != null ? String.valueOf(map.get("permission")) : null;
                     e.reason = map.get("reason") != null ? String.valueOf(map.get("reason"))
@@ -1114,8 +1218,12 @@ public class ACMCommand {
     /* helpers                                                            */
     /* ------------------------------------------------------------------ */
 
+    private String joinArgs(String[] args, int from) {
+        return String.join(" ", java.util.Arrays.copyOfRange(args, Math.min(from, args.length), args.length)).trim();
+    }
+
     private String normalizeInput(String input) {
-        return StringSanitizer.normalize(input);
+        return plugin.getBlacklist().canonicalize(input);
     }
 
     /**

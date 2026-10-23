@@ -76,6 +76,24 @@ public class CommandHandler {
                 + "tried to use " + matchedCommand + " (source=" + source + ", world=" + world + ")");
     }
 
+    /**
+     * Alert-only rules let the command execute. They never record a violation
+     * or trigger punishment escalation; staff still receive the alert.
+     */
+    public void onAlertOnly(@NotNull CommandSender sender, @NotNull String rawInput,
+                            @NotNull String matchedCommand, @NotNull String source) {
+        if (!(sender instanceof Player player)) return;
+        if (plugin.getAuditLog() != null) {
+            plugin.getAuditLog().write("ALERT_ONLY",
+                    player.getName() + " " + player.getUniqueId()
+                            + " command=" + matchedCommand + " source=" + source);
+        }
+        plugin.getAlertManager().sendAlert(player, matchedCommand, rawInput,
+                player.getWorld().getName());
+        plugin.getLogger().info("Alert-only command for " + player.getName()
+                + ": " + matchedCommand + " (source=" + source + ")");
+    }
+
     public boolean isAdmin(@NotNull CommandSender sender) {
         return sender instanceof Player && plugin.isAdmin((Player) sender);
     }

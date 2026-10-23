@@ -1,6 +1,7 @@
 package id.saryu.antichatmanager.listener;
 
 import id.saryu.antichatmanager.AntiChatManager;
+import id.saryu.antichatmanager.blacklist.BlacklistManager;
 import id.saryu.antichatmanager.util.RateLimitModule;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -11,6 +12,7 @@ import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerCommandSendEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.server.TabCompleteEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -48,10 +50,15 @@ public class PlayerListener implements Listener {
             plugin.getCommandHandler().onBlockedCommand(player, abbreviate(raw), "command-too-long", "length");
             return;
         }
-        String matched = plugin.getBlacklist().matchWithNested(raw);
-        if (matched != null && !plugin.getBlacklist().isAllowedFor(player, matched)) {
-            event.setCancelled(true);
-            plugin.getCommandHandler().onBlockedCommand(player, raw, matched, "bukkit");
+        BlacklistManager.MatchResult result = plugin.getBlacklist().resolveWithNested(raw);
+        if (result != null && !result.isAllow()
+                && !plugin.getBlacklist().isAllowedFor(player, result.command)) {
+            if (result.isBlock()) {
+                event.setCancelled(true);
+                plugin.getCommandHandler().onBlockedCommand(player, raw, result.command, "bukkit");
+            } else if (result.isAlertOnly()) {
+                plugin.getCommandHandler().onAlertOnly(player, raw, result.command, "bukkit");
+            }
         }
     }
 
@@ -69,7 +76,8 @@ public class PlayerListener implements Listener {
         Set<String> hidden = new HashSet<>();
         event.getCommands().removeIf(command -> {
             String base = plugin.getBlacklist().stripNamespace(command.toLowerCase());
-            if (plugin.getBlacklist().match(base) != null) {
+            BlacklistManager.MatchResult result = plugin.getBlacklist().resolve(base);
+            if (result != null && result.isBlock()) {
                 hidden.add(base);
                 return true;
             }
@@ -95,11 +103,17 @@ public class PlayerListener implements Listener {
 
         // Geyser/Floodgate command attempts can arrive as chat text.
         if (message.startsWith("/")) {
-            String matched = plugin.getBlacklist().matchWithNested(message);
-            if (matched != null && !plugin.getBlacklist().isAllowedFor(player, matched)) {
-                event.setCancelled(true);
-                plugin.getCommandHandler().onBlockedCommand(player, message, matched, "chat");
-                return;
+            BlacklistManager.MatchResult result = plugin.getBlacklist().resolveWithNested(message);
+            if (result != null && !result.isAllow()
+                    && !plugin.getBlacklist().isAllowedFor(player, result.command)) {
+                if (result.isBlock()) {
+                    event.setCancelled(true);
+                    plugin.getCommandHandler().onBlockedCommand(player, message, result.command, "chat");
+                    return;
+                }
+                if (result.isAlertOnly()) {
+                    plugin.getCommandHandler().onAlertOnly(player, message, result.command, "chat");
+                }
             }
         }
 
@@ -141,13 +155,17 @@ public class PlayerListener implements Listener {
         } else if (event.getSender() instanceof org.bukkit.command.RemoteConsoleCommandSender) {
             block = !plugin.getConfigModule().getBoolean("blacklist.sources.rcon", false);
         }
-        String matched = plugin.getBlacklist().matchWithNested(raw);
-        if (matched != null && block) {
-            event.setCancelled(true);
-            plugin.getLogger().warning("Blocked blacklisted command from " + event.getSender().getName()
-                    + ": " + abbreviate(raw));
-            if (event.getSender() instanceof Player p) {
-                plugin.getAlertManager().sendAlert(p, matched, raw, "server");
+        BlacklistManager.MatchResult result = plugin.getBlacklist().resolveWithNested(raw);
+        if (result != null && block) {
+            if (result.isBlock()) {
+                event.setCancelled(true);
+                plugin.getLogger().warning("Blocked blacklisted command from " + event.getSender().getName()
+                        + ": " + abbreviate(raw));
+                if (event.getSender() instanceof Player p) {
+                    plugin.getAlertManager().sendAlert(p, result.command, raw, "server");
+                }
+            } else if (result.isAlertOnly() && event.getSender() instanceof Player p) {
+                plugin.getCommandHandler().onAlertOnly(p, raw, result.command, "server");
             }
         }
     }
@@ -171,7 +189,7 @@ public class PlayerListener implements Listener {
             if (line == null) continue;
             String plain = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
                     .serialize(plugin.getMsg().parse(line));
-            if (unsafeInteractiveText(plain) || plugin.getBlacklist().matchWithNested(plain) != null) {
+            if (unsafeInteractiveText(plain) || isBlockedCommand(plain)) {
                 event.setCancelled(true);
                 return;
             }
@@ -183,7 +201,37 @@ public class PlayerListener implements Listener {
         String lower = text.toLowerCase(java.util.Locale.ROOT);
         if (lower.contains("<click:") || lower.contains("clickevent") || lower.contains("run_command")
                 || lower.contains("suggest_command") || lower.contains("open_url")) return true;
-        return plugin.getBlacklist().matchWithNested(text) != null;
+        return isBlockedCommand(text);
+    }
+
+    private boolean isBlockedCommand(@NotNull String text) {
+        BlacklistManager.MatchResult result = plugin.getBlacklist().resolveWithNested(text);
+        return result != null && result.isBlock();
+    }
+
+    /**
+     * Optional subcommand filtering. Bukkit/Paper does not send command argument
+     * completions through the command-list packet, so this removes suggestions
+     * that would execute a blocked rule. Alert-only and allow rules remain
+     * visible; a bypass permission sees the normal list.
+     */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onTabComplete(@NotNull TabCompleteEvent event) {
+        if (!(event.getSender() instanceof Player player)) return;
+        if (plugin.canBypass(player)) return;
+        if (!plugin.getRateLimit().check(player, RateLimitModule.Kind.TAB)) {
+            event.setCancelled(true);
+            return;
+        }
+        String buffer = event.getBuffer();
+        if (buffer == null || !buffer.startsWith("/") || buffer.length() > plugin.maxCommandLength()) return;
+        int space = buffer.lastIndexOf(' ');
+        String prefix = space >= 0 ? buffer.substring(0, space + 1) : buffer;
+        event.getCompletions().removeIf(completion -> {
+            if (completion == null || completion.isBlank()) return false;
+            BlacklistManager.MatchResult result = plugin.getBlacklist().resolve(prefix + completion);
+            return result != null && result.isBlock();
+        });
     }
 
     @EventHandler

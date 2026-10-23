@@ -6,6 +6,7 @@ import id.saryu.libcore.util.TtlCache;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandMap;
+import org.bukkit.configuration.ConfigurationSection;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -32,9 +33,49 @@ import java.util.regex.Pattern;
  */
 public class BlacklistManager {
 
-    public enum MatchMode { EXACT, STARTSWITH, REGEX, WILDCARD, ARGUMENT }
+    public enum MatchMode { EXACT, STARTSWITH, REGEX, WILDCARD, ARGUMENT, SUBCOMMAND }
 
-    public enum Source { MANUAL, PLUGIN_SCAN, LUCKPERMS_SCAN, IMPORT }
+    public enum Source { MANUAL, PLUGIN_SCAN, LUCKPERMS_SCAN, IMPORT, CONFIG, MANUAL_SCAN }
+
+    /** What should happen when an entry matches. */
+    public enum Action {
+        BLOCK, ALERT_ONLY, ALLOW;
+
+        public static @NotNull Action parse(@Nullable String value) {
+            if (value == null) return BLOCK;
+            return switch (value.trim().toLowerCase(Locale.ROOT).replace('_', '-')) {
+                case "allow", "allowed", "permit" -> ALLOW;
+                case "alert-only", "alert", "notify" -> ALERT_ONLY;
+                default -> BLOCK;
+            };
+        }
+    }
+
+    /**
+     * Result of a command match. The entry carries the configured action, so the
+     * packet/event layers can distinguish block, alert-only and allow rules.
+     */
+    public static final class MatchResult {
+        public final @Nullable Entry entry;
+        public final @NotNull String command;
+        public final @NotNull String rawCommand;
+
+        public MatchResult(@Nullable Entry entry, @NotNull String command, @NotNull String rawCommand) {
+            this.entry = entry;
+            this.command = command;
+            this.rawCommand = rawCommand;
+        }
+
+        public @NotNull Action action() {
+            return entry == null || entry.action == null ? Action.BLOCK : entry.action;
+        }
+
+        public boolean isBlock() { return action() == Action.BLOCK; }
+        public boolean isAlertOnly() { return action() == Action.ALERT_ONLY; }
+        public boolean isAllow() { return action() == Action.ALLOW; }
+    }
+
+    private static final MatchResult NO_MATCH = new MatchResult(null, "", "");
 
     public static class Entry {
         public int id;
@@ -42,6 +83,7 @@ public class BlacklistManager {
         @NotNull public String normalized = "";
         @NotNull public MatchMode mode = MatchMode.EXACT;
         @NotNull public Source source = Source.MANUAL;
+        @NotNull public Action action = Action.BLOCK;
         @Nullable public String pluginName;
         @Nullable public String permission;
         @Nullable public String reason;
@@ -55,6 +97,14 @@ public class BlacklistManager {
         public Pattern regexPattern;
 
         public Entry() {}
+
+        /** Source label persisted/shown for manual scans, e.g. manual-scan:WorldEdit. */
+        public @NotNull String sourceLabel() {
+            if (source == Source.MANUAL_SCAN && pluginName != null && !pluginName.isBlank()) {
+                return "manual-scan:" + pluginName;
+            }
+            return source.name();
+        }
 
         public void compileRegex() {
             if (mode == MatchMode.REGEX) {
@@ -89,6 +139,7 @@ public class BlacklistManager {
     private final Map<Integer, Entry> entriesById = new ConcurrentHashMap<>();
     private final Map<String, List<Entry>> entriesByCommand = new ConcurrentHashMap<>();
     private final TtlCache<String, String> matchCache = new TtlCache<>(5000, 20000);
+    private final TtlCache<String, MatchResult> resultCache = new TtlCache<>(5000, 20000);
     private final AtomicInteger tempIds = new AtomicInteger(-1);
     private final CommandMap commandMap;
     private final java.util.concurrent.CompletableFuture<Void> loadedFuture =
@@ -97,6 +148,9 @@ public class BlacklistManager {
     public BlacklistManager(@NotNull AntiChatManager plugin) {
         this.plugin = plugin;
         this.commandMap = Bukkit.getServer().getCommandMap();
+        // Config rules are loaded first so they take precedence over stale
+        // database rows with the same command (explicit admin intent wins).
+        loadConfigRules();
         loadEntries();
     }
 
@@ -108,7 +162,8 @@ public class BlacklistManager {
                 for (Entry e : loaded) {
                     if (e.mode == null) e.mode = MatchMode.EXACT;
                     if (e.source == null) e.source = Source.MANUAL;
-                    e.normalized = StringSanitizer.normalize(e.command);
+                    if (e.action == null) e.action = Action.BLOCK;
+                    e.normalized = canonicalize(e.command);
                     e.compileRegex();
                     if (contains(e.normalized)) continue; // duplicate row from an earlier run
                     addEntryInternal(e);
@@ -121,6 +176,54 @@ public class BlacklistManager {
                 loadedFuture.complete(null);
             }
         });
+    }
+
+    /**
+     * Load the admin-managed {@code commands:} section. These rules use literal
+     * token matching (never regex) and support block, alert-only and allow.
+     */
+    public void loadConfigRules() {
+        ConfigurationSection section = plugin.getConfigModule().get().getConfigurationSection("commands");
+        if (section == null) return;
+        for (String key : section.getKeys(false)) {
+            if (key == null || key.isBlank()) continue;
+            String normalized = canonicalize(key);
+            if (normalized.isBlank() || normalized.length() > 256) {
+                plugin.getLogger().warning("Ignoring invalid commands rule (empty or too long): " + key);
+                continue;
+            }
+            ConfigurationSection rule = section.getConfigurationSection(key);
+            String mode = rule != null ? rule.getString("mode", "block") : section.getString(key, "block");
+            if (mode == null || !(mode.equalsIgnoreCase("block") || mode.equalsIgnoreCase("alert-only")
+                    || mode.equalsIgnoreCase("alert") || mode.equalsIgnoreCase("allow")
+                    || mode.equalsIgnoreCase("allowed"))) {
+                plugin.getLogger().warning("Invalid mode in commands rule '" + key + "'; using block.");
+            }
+            Entry e = new Entry();
+            e.id = tempIds.getAndDecrement();
+            e.command = key.trim();
+            e.normalized = normalized;
+            e.mode = MatchMode.SUBCOMMAND;
+            e.source = Source.CONFIG;
+            e.action = Action.parse(mode);
+            e.reason = "config commands rule";
+            e.addedBy = "config";
+            e.addedAt = System.currentTimeMillis();
+            e.compileRegex();
+            addEntryInternal(e);
+        }
+    }
+
+    /** Re-read only the config rules, keeping database entries untouched. */
+    public synchronized void reloadConfigRules() {
+        List<Entry> remove = new ArrayList<>();
+        for (Entry e : entriesById.values()) {
+            if (e.source == Source.CONFIG) remove.add(e);
+        }
+        for (Entry e : remove) removeInMemory(e.id);
+        loadConfigRules();
+        matchCache.clear();
+        resultCache.clear();
     }
 
     /** Completes once the initial database load has finished (success or failure). */
@@ -139,6 +242,7 @@ public class BlacklistManager {
         list.removeIf(x -> x.id == e.id);
         list.add(e);
         matchCache.clear();
+        resultCache.clear();
     }
 
     /**
@@ -147,8 +251,9 @@ public class BlacklistManager {
      */
     public @NotNull Entry addEntry(@NotNull Entry e) {
         if (e.normalized == null || e.normalized.isEmpty()) {
-            e.normalized = StringSanitizer.normalize(e.command);
+            e.normalized = canonicalize(e.command);
         }
+        if (e.action == null) e.action = Action.BLOCK;
         e.compileRegex();
         if (e.addedAt == 0) e.addedAt = System.currentTimeMillis();
         if (e.addedBy == null) e.addedBy = "AntiChatManager";
@@ -176,7 +281,7 @@ public class BlacklistManager {
 
     /** Whether an equivalent entry (same normalized command + mode) already exists. */
     public boolean contains(@NotNull String command) {
-        String norm = StringSanitizer.normalize(command);
+        String norm = canonicalize(command);
         String only = commandOnly(norm);
         List<Entry> list = entriesByCommand.get(norm);
         if (list != null && !list.isEmpty()) return true;
@@ -191,27 +296,38 @@ public class BlacklistManager {
     }
 
     public boolean removeEntry(int id) {
-        Entry e = entriesById.remove(id);
+        Entry e = entriesById.get(id);
         if (e == null) return false;
+        removeInMemory(id);
+        if (e.source == Source.CONFIG) {
+            removeConfigRule(e.command);
+        } else if (id > 0) {
+            plugin.getStorage().deleteBlacklistEntry(id);
+        }
+        return true;
+    }
+
+    private void removeInMemory(int id) {
+        Entry e = entriesById.remove(id);
+        if (e == null) return;
         List<Entry> list = entriesByCommand.get(e.normalized);
         if (list != null) {
             list.removeIf(x -> x.id == id);
             if (list.isEmpty()) entriesByCommand.remove(e.normalized);
         }
         matchCache.clear();
-        plugin.getStorage().deleteBlacklistEntry(id);
-        return true;
+        resultCache.clear();
     }
 
     /** Remove all entries for a command (any source). Returns how many were removed. */
     public int removeByCommand(@NotNull String command, @Nullable Source onlySource) {
-        String norm = StringSanitizer.normalize(command);
+        String norm = canonicalize(command);
         String target = commandOnly(norm);
         List<Entry> matches = new ArrayList<>();
         for (Entry e : entriesById.values()) {
             if (onlySource != null && e.source != onlySource) continue;
             if (e.normalized.equals(norm)
-                    || commandOnly(e.normalized).equals(target)) {
+                    || (!norm.contains(" ") && commandOnly(e.normalized).equals(target))) {
                 matches.add(e);
             }
         }
@@ -219,6 +335,89 @@ public class BlacklistManager {
             removeEntry(e.id);
         }
         return matches.size();
+    }
+
+    public boolean removeConfigRulePublic(@NotNull String command) {
+        String norm = canonicalize(command);
+        ConfigurationSection section = plugin.getConfigModule().get().getConfigurationSection("commands");
+        if (section == null) return false;
+        boolean removed = false;
+        for (String key : new ArrayList<>(section.getKeys(false))) {
+            if (canonicalize(key).equals(norm)) {
+                section.set(key, null);
+                removed = true;
+            }
+        }
+        if (removed) {
+            plugin.getConfigModule().save();
+            reloadConfigRules();
+        }
+        return removed;
+    }
+
+    private void removeConfigRule(@NotNull String command) {
+        ConfigurationSection section = plugin.getConfigModule().get().getConfigurationSection("commands");
+        if (section == null) return;
+        for (String key : new ArrayList<>(section.getKeys(false))) {
+            if (canonicalize(key).equals(canonicalize(command))) {
+                section.set(key, null);
+            }
+        }
+        plugin.getConfigModule().save();
+    }
+
+    /** True when an exact (not prefix) rule with this normalized command exists. */
+    public boolean hasExactEntry(@NotNull String command) {
+        return findExactEntry(command) != null;
+    }
+
+    public @Nullable Entry findExactEntry(@NotNull String command) {
+        String norm = canonicalize(command);
+        for (Entry e : entriesById.values()) {
+            if (e.normalized.equals(norm)) return e;
+        }
+        return null;
+    }
+
+    /**
+     * Insert or update a manual-scan entry. Manual/allow rules are never
+     * overwritten: the caller checks {@link #findExactEntry(String)} first.
+     */
+    public @NotNull Entry addScannedEntry(@NotNull Entry e) {
+        e.normalized = canonicalize(e.command);
+        if (e.action == null) e.action = Action.BLOCK;
+        if (e.id == 0) e.id = tempIds.getAndDecrement();
+        e.compileRegex();
+        addEntryInternal(e);
+        final int tempId = e.id;
+        plugin.getStorage().upsertManualScanEntry(e).thenAccept(dbId -> {
+            if (dbId > 0) rebindId(e, tempId, dbId);
+        }).exceptionally(ex -> {
+            plugin.getLogger().warning("Could not persist manual-scan entry '" + e.command
+                    + "': " + ex.getMessage());
+            return null;
+        });
+        return e;
+    }
+
+    /** Disable a scan-owned entry in memory and storage (row is retained). */
+    public boolean disableEntry(int id) {
+        Entry e = entriesById.get(id);
+        if (e == null) return false;
+        removeInMemory(id);
+        if (id > 0) plugin.getStorage().setBlacklistEntryEnabled(id, false);
+        return true;
+    }
+
+    /** Disable all scan-owned rows for one plugin (disabled/uninstalled). */
+    public int disableManualScanEntriesForPlugin(@NotNull String pluginName) {
+        int disabled = 0;
+        for (Entry e : new ArrayList<>(entriesById.values())) {
+            if (e.source != Source.MANUAL_SCAN) continue;
+            if (e.pluginName == null || !e.pluginName.equalsIgnoreCase(pluginName)) continue;
+            if (disableEntry(e.id)) disabled++;
+        }
+        return disabled;
     }
 
     public @Nullable Entry getEntry(int id) {
@@ -242,78 +441,134 @@ public class BlacklistManager {
     }
 
     public @Nullable Entry findEntry(@NotNull String command) {
-        String norm = StringSanitizer.normalize(command);
-        String only = commandOnly(norm);
-        List<Entry> list = entriesByCommand.get(norm);
-        if (list != null && !list.isEmpty()) return list.get(0);
-        list = entriesByCommand.get(only);
-        if (list != null && !list.isEmpty()) return list.get(0);
-        for (Entry e : entriesById.values()) {
-            if (e.enabled && matches(e, norm, only)) return e;
-        }
-        return null;
+        MatchResult result = resolve(command);
+        return result == null ? null : result.entry;
     }
 
     /**
-     * Match a raw command string. Returns the blacklist entry that matched, or
-     * null. Handles namespaces, aliases and nested commands.
+     * Match a raw command string. Returns the matched entry's command, or null.
+     * Kept for API/backwards compatibility; new code should use
+     * {@link #resolve(String)} so the per-entry action is available.
      */
     public @Nullable String match(@NotNull String rawCommand) {
-        String norm = StringSanitizer.normalize(rawCommand);
-        if (norm.isEmpty()) return null;
-        if (norm.length() > 256) return null;
+        MatchResult result = resolve(rawCommand);
+        return result == null ? null : result.command;
+    }
 
-        String cached = matchCache.get(norm);
-        if (cached != null) return cached.isEmpty() ? null : cached;
+    /**
+     * Resolve a command using longest-prefix token matching. Aliases and
+     * namespaces are canonicalized before comparison; config rules use literal
+     * tokens (with {@code *} matching exactly one argument), never regex.
+     */
+    public @Nullable MatchResult resolve(@NotNull String rawCommand) {
+        String norm = canonicalize(rawCommand);
+        if (norm.isEmpty() || norm.length() > 256) return null;
 
-        String only = commandOnly(norm);
+        MatchResult cached = resultCache.get(norm);
+        if (cached != null) return cached.entry == null ? null : cached;
 
-        Entry exact = findExact(norm);
-        if (exact == null) exact = findExact(only);
-        if (exact == null) exact = findExactByAlias(only);
-        if (exact != null) {
-            matchCache.put(norm, exact.command);
-            return exact.command;
-        }
+        Set<String> variants = commandVariants(norm);
+        Entry best = null;
+        int bestScore = Integer.MIN_VALUE;
 
-        for (List<Entry> list : entriesByCommand.values()) {
-            for (Entry e : list) {
-                if (!e.enabled) continue;
-                if (matches(e, norm, only)) {
-                    matchCache.put(norm, e.command);
-                    return e.command;
+        for (Entry e : entriesById.values()) {
+            if (!e.enabled) continue;
+            for (String variant : variants) {
+                String only = commandOnly(variant);
+                if (!matches(e, variant, only)) continue;
+                int score = specificity(e);
+                if (score > bestScore) {
+                    best = e;
+                    bestScore = score;
                 }
             }
         }
 
-        matchCache.put(norm, "");
-        return null;
+        if (best == null) {
+            resultCache.put(norm, NO_MATCH);
+            matchCache.put(norm, "");
+            return null;
+        }
+        MatchResult result = new MatchResult(best, best.command, rawCommand);
+        resultCache.put(norm, result);
+        matchCache.put(norm, best.command);
+        return result;
     }
 
     /**
      * Match the command and its nested commands (execute run, return run, ...).
      */
     public @Nullable String matchWithNested(@NotNull String rawCommand) {
-        String direct = match(rawCommand);
-        if (direct != null) return direct;
-        return scanNested(rawCommand);
+        MatchResult result = resolveWithNested(rawCommand);
+        return result == null ? null : result.command;
     }
 
-    private @Nullable Entry findExact(String cmd) {
-        List<Entry> list = entriesByCommand.get(cmd);
-        if (list == null) return null;
-        for (Entry e : list) {
-            if (e.mode == MatchMode.EXACT && e.enabled) return e;
-        }
-        return null;
+    /** Action-aware nested resolver used by packet/event interception. */
+    public @Nullable MatchResult resolveWithNested(@NotNull String rawCommand) {
+        return resolveWithNested(rawCommand, 0);
     }
 
-    private @Nullable Entry findExactByAlias(@NotNull String base) {
-        for (String alias : resolveAliases(base)) {
-            Entry e = findExact(alias);
-            if (e != null) return e;
+    private @Nullable MatchResult resolveWithNested(@NotNull String rawCommand, int depth) {
+        if (depth > 8) return null;
+        MatchResult direct = resolve(rawCommand);
+        if (direct != null && !direct.isAllow()) return direct;
+        MatchResult nested = scanNestedResult(rawCommand, depth);
+        if (nested != null) return nested;
+        return direct;
+    }
+
+    /**
+     * Canonical command form: normalize, strip a namespace from the first
+     * token, and retain the rest ("worldguard:wg reload" -> "wg reload").
+     */
+    public @NotNull String canonicalize(@NotNull String command) {
+        String norm = StringSanitizer.normalize(command);
+        if (norm.isEmpty()) return "";
+        int space = norm.indexOf(' ');
+        String first = space >= 0 ? norm.substring(0, space) : norm;
+        int colon = first.indexOf(':');
+        if (colon > 0) {
+            first = first.substring(colon + 1);
         }
-        return null;
+        return space < 0 ? first : first + norm.substring(space);
+    }
+
+    private @NotNull Set<String> commandVariants(@NotNull String canonical) {
+        Set<String> variants = new java.util.LinkedHashSet<>();
+        variants.add(canonical);
+        int space = canonical.indexOf(' ');
+        String first = space >= 0 ? canonical.substring(0, space) : canonical;
+        String rest = space >= 0 ? canonical.substring(space) : "";
+        for (String alias : resolveAliases(first)) {
+            if (alias == null || alias.isBlank() || alias.indexOf(' ') >= 0) continue;
+            variants.add(alias.toLowerCase(Locale.ROOT) + rest);
+        }
+        return variants;
+    }
+
+    private int specificity(@NotNull Entry e) {
+        String[] tokens = e.normalized.split(" ");
+        int literals = 0;
+        for (String token : tokens) if (!"*".equals(token)) literals++;
+        int source = switch (e.source) {
+            case CONFIG -> 50;
+            case MANUAL -> 40;
+            case IMPORT -> 30;
+            case PLUGIN_SCAN -> 20;
+            case LUCKPERMS_SCAN -> 10;
+            case MANUAL_SCAN -> 25;
+        };
+        int mode = switch (e.mode) {
+            case EXACT, SUBCOMMAND, ARGUMENT -> 20;
+            case STARTSWITH -> 10;
+            case WILDCARD, REGEX -> 5;
+        };
+        int action = switch (e.action == null ? Action.BLOCK : e.action) {
+            case ALLOW -> 3;
+            case ALERT_ONLY -> 2;
+            case BLOCK -> 1;
+        };
+        return tokens.length * 1000 + literals * 100 + mode * 10 + source + action;
     }
 
     private boolean matches(@NotNull Entry e, @NotNull String norm, @NotNull String only) {
@@ -323,6 +578,8 @@ public class BlacklistManager {
                 return e.normalized.equals(norm)
                         || e.normalized.equals(only)
                         || norm.startsWith(e.normalized + " ");
+            case SUBCOMMAND:
+                return tokenMatch(e.normalized, norm);
             case STARTSWITH:
                 return norm.startsWith(e.normalized) || only.startsWith(e.normalized);
             case WILDCARD:
@@ -337,6 +594,21 @@ public class BlacklistManager {
             default:
                 return false;
         }
+    }
+
+    /**
+     * Literal longest-prefix token comparison. {@code *} consumes exactly one
+     * input token; no regex is compiled from configuration. Input length is
+     * already bounded by {@link #resolve(String)}.
+     */
+    private boolean tokenMatch(@NotNull String pattern, @NotNull String input) {
+        String[] pat = pattern.split(" ");
+        String[] in = input.split(" ");
+        if (in.length < pat.length) return false;
+        for (int i = 0; i < pat.length; i++) {
+            if (!"*".equals(pat[i]) && !pat[i].equals(in[i])) return false;
+        }
+        return true;
     }
 
     /** First command token without namespace: "minecraft:op Steve" -> "op". */
@@ -435,7 +707,13 @@ public class BlacklistManager {
      * function, schedule, tellraw run_command) and return the first matched entry.
      */
     public @Nullable String scanNested(@NotNull String fullCommand) {
-        String norm = StringSanitizer.normalize(fullCommand);
+        MatchResult result = scanNestedResult(fullCommand, 0);
+        return result == null ? null : result.command;
+    }
+
+    private @Nullable MatchResult scanNestedResult(@NotNull String fullCommand, int depth) {
+        if (depth > 8) return null;
+        String norm = canonicalize(fullCommand);
         if (norm.isEmpty()) return null;
 
         String[] parts = norm.split("\\s+");
@@ -447,17 +725,16 @@ public class BlacklistManager {
             case "execute", "return", "schedule" -> {
                 int runIdx = indexOf(parts, "run");
                 if (runIdx >= 0 && runIdx + 1 < parts.length) {
-                    String nested = reconstruct(parts, runIdx + 1);
-                    String matched = matchWithNested(nested);
+                    MatchResult matched = resolveWithNested(reconstruct(parts, runIdx + 1), depth + 1);
                     if (matched != null) return matched;
                 } else if (baseFirst.equals("schedule") && parts.length > 1) {
-                    String matched = matchWithNested(reconstruct(parts, 1));
+                    MatchResult matched = resolveWithNested(reconstruct(parts, 1), depth + 1);
                     if (matched != null) return matched;
                 }
             }
             case "function" -> {
                 if (parts.length > 1) {
-                    String matched = match(parts[1]);
+                    MatchResult matched = resolveWithNested(parts[1], depth + 1);
                     if (matched != null) return matched;
                 }
             }
@@ -472,7 +749,7 @@ public class BlacklistManager {
                         String nested = tail.substring(start + 1).replaceFirst("^\\s*\"", "");
                         int end = nested.indexOf('"');
                         if (end > 0) nested = nested.substring(0, end);
-                        String matched = matchWithNested(nested);
+                        MatchResult matched = resolveWithNested(nested, depth + 1);
                         if (matched != null) return matched;
                     }
                 }
@@ -564,6 +841,8 @@ public class BlacklistManager {
         entriesById.clear();
         entriesByCommand.clear();
         matchCache.clear();
+        resultCache.clear();
+        loadConfigRules();
         loadEntries();
     }
 

@@ -63,8 +63,8 @@ AntiChatManager/                    # Root Gradle project
 - **Minecraft**: PaperMC 1.21 – 26.3 (Purpur compatible)
 - **Java**: 21 runtime (compiled to Java 21 bytecode, runs on Java 25)
 - **Dependencies**: SaryuLibCore must be installed in the server's `plugins/` folder
-- **Optional**: LuckPerms, PlaceholderAPI, Floodgate/Geyser, PacketEvents, LiteBans,
-  LibertyBans, AdvancedBan, BanManager, EssentialsX
+- **Optional**: LuckPerms, PlaceholderAPI, Floodgate/Geyser, PacketEvents, WorldEdit,
+  FastAsyncWorldEdit, WorldGuard, LiteBans, LibertyBans, AdvancedBan, BanManager, EssentialsX
 
 ## Build
 
@@ -123,12 +123,20 @@ Edit `plugins/AntiChatManager/config.yml` (documented inline). Key sections:
 - `security.*`, `webhook.*` — SSRF allowlist, alert cooldown, Discord event hooks
 - `plugin-identity.*` — Modrinth hash lookup, cache TTL, minimum confidence
 - `conflict-detection.*` — LuckPerms command conflict review, ignore/allow lists
-- `audit.*` — permission audit, ignore lists, notification interval
+- `audit.*` — permission audit, ignore lists, notification interval, risky plugin nodes
 - `scan.*` — auto-scan interval and enable/disable switches
+- `commands:` — literal token rules, e.g. `wg reload` (block), `rg flag` (block),
+  `lp info` (allow). `*` matches exactly one argument; rules are never treated as regex.
+- `plugin-manual-scan:` — sensitive plugins whose command labels and aliases are mapped
+  and blacklisted with source `manual-scan:<plugin>`; missing plugins are retried when enabled.
+- `integration.*` — WorldEdit/FAWE/WorldGuard detection, compat mode, read-only config audit.
+  Recommendations are opt-in and are written only by `/acm integration apply <target>`.
 
-Config files use a versioned schema (`config.version: 3`). On upgrade, SaryuLibCore
-adds new keys without overwriting existing values; old on-disk language files also
-receive missing help rows in memory, so `/acm help` stays complete.
+Config files use a versioned schema (`config.version: 4`, DB schema v4). On upgrade,
+SaryuLibCore adds new keys without overwriting existing values; existing blacklist rows
+default to `action=BLOCK`. Old on-disk language files also receive missing help rows in
+memory, so `/acm help` stays complete; delete a language file to regenerate it with the
+newest keys.
 
 ### API and placeholders
 
@@ -148,6 +156,8 @@ All commands under `/acm` (alias `/antichatmanager`):
 | `/acm reload` | `saryuantichatmanager.admin` | Reload config, language, blacklist engine |
 | `/acm info` | `saryuantichatmanager.admin` | Status: DB, packet layer, LuckPerms, language, last scan |
 | `/acm scan [report\|sources\|identify]` | `saryuantichatmanager.admin` | Run auto-scan, inspect the last result, or re-identify plugin JARs |
+| `/acm scan <plugin>` | `saryuantichatmanager.admin` | Map one plugin on demand; configured plugins are blacklisted, others are previews |
+| `/acm scan list` | `saryuantichatmanager.admin` | Show cached mappings from manual scan and integration |
 | `/acm plugins` | `saryuantichatmanager.admin` | Show plugin identity / Modrinth hash verification results |
 | `/acm conflicts [page\|ignore\|allow]` | `saryuantichatmanager.admin` | Review LuckPerms/blacklist command conflicts |
 | `/acm audit [page\|info\|ack\|ignore]` | `saryuantichatmanager.admin` | Review and manage permission-audit findings |
@@ -163,11 +173,17 @@ All commands under `/acm` (alias `/antichatmanager`):
 | `/acm violations [reset] <player>` | `saryuantichatmanager.admin` | Show or reset violation counts |
 | `/acm template list\|preview\|set <name>` | `saryuantichatmanager.admin` | Manage alert templates |
 | `/acm language [list\|reload\|set <code\|number>]` | `saryuantichatmanager.admin` | Show, change (code or list number) or reload languages |
-| `/acm export [file]` | `saryuantichatmanager.admin` | Export blacklist to YAML |
+| `/acm integration <status\|scan\|reload\|apply>` | `saryuantichatmanager.integration.admin` | Inspect/refresh WE/FAWE/WG mappings and opt in to rules |
+| `/acm subcmd add [block\|alert-only\|allow] <command...>` | `saryuantichatmanager.subcmd.admin` | Add a literal token rule to `commands:` |
+| `/acm subcmd remove <command...>` | `saryuantichatmanager.subcmd.admin` | Remove a `commands:` rule |
+| `/acm subcmd list` | `saryuantichatmanager.subcmd.admin` | List configured subcommand rules |
+| `/acm export [file]` | `saryuantichatmanager.admin` | Export blacklist (including action/source) to YAML |
 | `/acm import <file>` | `saryuantichatmanager.admin` | Import blacklist from YAML |
 
 Permissions:
 - `saryuantichatmanager.admin` — all `/acm` commands (default: op)
+- `saryuantichatmanager.integration.admin` — `/acm integration` (default: op)
+- `saryuantichatmanager.subcmd.admin` — `/acm subcmd` (default: op)
 - `saryuantichatmanager.bypass` — use blacklisted commands (default: false)
 - `saryuantichatmanager.alerts` — receive staff alerts (default: op)
 
@@ -194,11 +210,14 @@ minimal working example (< 100 lines).
 
 See `TESTING.md` for a step-by-step manual verification plan covering:
 - Regular player vs OP vs bypass
-- Aliases, namespaces, `/execute run`, unicode, packet spam
-- LuckPerms scan (change permission → automatic rescan)
-- `blacklist check` showing source
+- Aliases, namespaces, `/execute run`, unicode, packet spam, long input
+- `commands:` subcommand rules (`block`, `alert-only`, `allow`)
+- `plugin-manual-scan` mapping, plugin enable/disable, and `/acm scan <plugin>`
+- WorldEdit/FAWE/WorldGuard detection and opt-in `/acm integration apply`
+- LuckPerms scan (change permission → automatic rescan) and risky plugin-node audit
+- `blacklist check` showing source/action
 - Language switching, all 5 alert templates
-- SQLite / H2 / MySQL
+- SQLite / H2 / MySQL and schema v4 migration
 - Punishment ladder: warn → kick → tempban → permban
 - Ban provider auto-detection (EssentialsX, LiteBans, none)
 # GuardPlugin-Project
