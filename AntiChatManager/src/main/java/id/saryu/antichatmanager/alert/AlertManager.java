@@ -43,24 +43,12 @@ public class AlertManager {
         templateCache.clear();
         // Templates live in the language files (templates.<name>) as required by
         // the spec. config.yml templates are optional per-install overrides.
-        try {
-            org.bukkit.configuration.ConfigurationSection langSection = plugin.getLang().section("templates");
-            if (langSection != null) {
-                for (String name : langSection.getKeys(false)) {
-                    String raw = langSection.getString(name);
-                    if (raw != null && !raw.isBlank()) templateCache.put(name, raw);
-                }
-            }
-        } catch (Exception ignored) {}
-        try {
-            org.bukkit.configuration.ConfigurationSection section = plugin.getConfigModule().get().getConfigurationSection("templates");
-            if (section != null) {
-                for (String name : section.getKeys(false)) {
-                    String raw = section.getString(name);
-                    if (raw != null && !raw.isBlank()) templateCache.put(name, raw);
-                }
-            }
-        } catch (Exception ignored) {}
+        // v7 spec path is alert.templates; older installs use templates. Read
+        // both, with the older template path winning for compatibility.
+        loadTemplateSection(plugin.getLang().section("alert.templates"));
+        loadTemplateSection(plugin.getLang().section("templates"));
+        loadTemplateSection(plugin.getConfigModule().get().getConfigurationSection("alert.templates"));
+        loadTemplateSection(plugin.getConfigModule().get().getConfigurationSection("templates"));
         // Ensure defaults exist.
         templateCache.putIfAbsent("boxed",
                 "<#FF5555>=================================\n"
@@ -88,6 +76,14 @@ public class AlertManager {
     private int alertPerMinute = 30;
     private long minuteWindowStart = System.currentTimeMillis();
     private int minuteCount = 0;
+
+    private void loadTemplateSection(@org.jetbrains.annotations.Nullable org.bukkit.configuration.ConfigurationSection section) {
+        if (section == null) return;
+        for (String name : section.getKeys(false)) {
+            String raw = section.getString(name);
+            if (raw != null && !raw.isBlank()) templateCache.put(name, raw);
+        }
+    }
 
     public void reloadConfig() {
         enabled = plugin.getConfigModule().getBoolean("alert.enabled", true);
@@ -135,8 +131,13 @@ public class AlertManager {
         // template (when language-per-player is enabled).
         Map<String, List<Player>> byTemplate = new HashMap<>();
         for (Player p : recipients) {
-            String localized = plugin.getLang().getForPlayer(p, "templates." + template);
-            if (localized == null || localized.isBlank() || localized.equals("templates." + template)) {
+            String key = "alert.templates." + template;
+            String localized = plugin.getLang().getForPlayer(p, key);
+            if (localized == null || localized.isBlank() || localized.equals(key)) {
+                key = "templates." + template;
+                localized = plugin.getLang().getForPlayer(p, key);
+            }
+            if (localized == null || localized.isBlank() || localized.equals(key)) {
                 localized = rawTemplate;
             }
             byTemplate.computeIfAbsent(localized, k -> new java.util.ArrayList<>()).add(p);
@@ -207,10 +208,15 @@ public class AlertManager {
         // previewing after /acm language <code> reflects the new language.
         String raw = null;
         var section = plugin.getConfigModule().get().getConfigurationSection("templates");
+        if (section == null) section = plugin.getConfigModule().get().getConfigurationSection("alert.templates");
         if (section != null) raw = section.getString(name);
         if (raw == null || raw.isBlank()) {
-            String key = "templates." + name;
+            String key = "alert.templates." + name;
             raw = plugin.getLang().get(key);
+            if (raw.equals(key)) {
+                key = "templates." + name;
+                raw = plugin.getLang().get(key);
+            }
             if (raw.equals(key)) raw = templateCache.get(name);
         }
         if (raw == null) return null;

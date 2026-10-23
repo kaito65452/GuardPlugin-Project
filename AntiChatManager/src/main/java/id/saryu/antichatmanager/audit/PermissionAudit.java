@@ -63,7 +63,7 @@ public class PermissionAudit {
         ignorePerms.clear();
         ignoreGroups.addAll(lower(plugin.getConfigModule().getStringList("audit.ignore-groups")));
         ignoreUsers.addAll(lower(plugin.getConfigModule().getStringList("audit.ignore-users")));
-        ignorePerms.addAll(plugin.getConfigModule().getStringList("audit.ignore-permissions"));
+        ignorePerms.addAll(lower(plugin.getConfigModule().getStringList("audit.ignore-permissions")));
     }
 
     private Set<String> lower(List<String> values) {
@@ -249,10 +249,44 @@ public class PermissionAudit {
         plugin.getStorage().saveAuditFinding(f);
     }
 
+    /** Backwards-compatible helper: {@code user=true} ignores a user, otherwise a group. */
     public void ignore(String target, boolean user) {
-        if (user) ignoreUsers.add(target.toLowerCase(Locale.ROOT));
-        else ignoreGroups.add(target.toLowerCase(Locale.ROOT));
-        plugin.getConfigModule().get().set(user ? "audit.ignore-users" : "audit.ignore-groups", new ArrayList<>(user ? ignoreUsers : ignoreGroups));
+        ignore(target, user ? "user" : "group");
+    }
+
+    /**
+     * Add a group, user or permission node to the ignore list. Existing findings
+     * that match are marked IGNORED so they disappear from {@link #getOpen()}.
+     */
+    public void ignore(@Nullable String target, @NotNull String type) {
+        if (target == null || target.isBlank()) return;
+        String value = target.trim().toLowerCase(Locale.ROOT);
+        switch (type.toLowerCase(Locale.ROOT)) {
+            case "user" -> ignoreUsers.add(value);
+            case "node", "permission", "perm" -> ignorePerms.add(value);
+            default -> ignoreGroups.add(value);
+        }
+        saveIgnores();
+        for (Finding f : findings.values()) {
+            boolean match = switch (type.toLowerCase(Locale.ROOT)) {
+                case "user" -> f.subjectType.equalsIgnoreCase("USER")
+                        && f.subjectName != null && f.subjectName.equalsIgnoreCase(target);
+                case "node", "permission", "perm" -> f.node != null && f.node.equalsIgnoreCase(target);
+                default -> f.subjectType.equalsIgnoreCase("GROUP")
+                        && f.subjectName != null && f.subjectName.equalsIgnoreCase(target);
+            };
+            if (match && !"RESOLVED".equals(f.status)) {
+                f.status = "IGNORED";
+                plugin.getStorage().saveAuditFinding(f);
+            }
+        }
+    }
+
+    private void saveIgnores() {
+        var cfg = plugin.getConfigModule().get();
+        cfg.set("audit.ignore-groups", new ArrayList<>(ignoreGroups));
+        cfg.set("audit.ignore-users", new ArrayList<>(ignoreUsers));
+        cfg.set("audit.ignore-permissions", new ArrayList<>(ignorePerms));
         plugin.getConfigModule().save();
     }
 

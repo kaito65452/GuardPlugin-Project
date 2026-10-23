@@ -16,9 +16,7 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Properties;
-import java.util.TreeMap;
 
 /**
  * Read-only security audit. It never edits server configuration or permission
@@ -149,12 +147,11 @@ public class SecurityAudit {
         boolean changed = false;
         File[] jars = pluginDir.listFiles((dir, name) -> name.toLowerCase(Locale.ROOT).endsWith(".jar"));
         if (jars == null) return;
-        Map<String, String> hashes = new TreeMap<>();
         for (File jar : jars) {
             String hash = jarHash(jar);
             if (hash == null) continue;
-            hashes.put(jar.getName(), hash);
-            String old = baseline.getString("jars." + jar.getName());
+            String baselineKey = "jars." + jar.getName().replace('.', '_');
+            String old = baseline.getString(baselineKey);
             if (old == null) {
                 changed = true;
             } else if (!old.equals(hash)) {
@@ -162,7 +159,7 @@ public class SecurityAudit {
                         + jar.getName() + " (possible update, or tampering/infection; verify the source)."));
                 changed = true;
             }
-            baseline.set("jars." + jar.getName(), hash);
+            baseline.set(baselineKey, hash);
         }
         if (changed) {
             baseline.set("updated-at", System.currentTimeMillis());

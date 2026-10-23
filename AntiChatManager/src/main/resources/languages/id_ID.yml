@@ -162,7 +162,7 @@ messages:
   plugins.header: "&b=== Identitas Plugin ==="
   plugins.line: "&7{plugin} &8- &f{status} &7(conf={confidence}%) {project}"
   plugins.empty: "&7Belum ada data identitas plugin. Jalankan &f/acm scan identify&7."
-  plugins.identify.done: "&aIdentifikasi plugin selesai."
+  plugins.identify.done: "&aIdentifikasi plugin dimulai di latar belakang; gunakan &f/acm plugins&a untuk hasilnya."
 
   # --- Konflik ---
   conflicts.usage: "&7Penggunaan: &f/acm conflicts [halaman]"
@@ -175,11 +175,14 @@ messages:
   conflicts.action.blocked: "&cAksi ini membutuhkan &fsaryuantichatmanager.admin&c."
 
   # --- Audit ---
-  audit.usage: "&7Penggunaan: &f/acm audit [info|ack|ignore]"
+  audit.usage: "&7Penggunaan: &f/acm audit [info|ack|ignore <group|user|node> <name>]"
   audit.empty: "&7Tidak ada temuan audit terbuka."
   audit.header: "&b=== Audit Permission (halaman {page}/{total}) ==="
   audit.line: "&7[{severity}] &f{subject} ({type}) &7memiliki &f{node} &8asal={origin}"
   audit.info.title: "&b=== Detail Temuan Audit #{id} ==="
+  audit.info.type: "&7Tipe: &f{type} &7Subjek: &f{subject}"
+  audit.info.node: "&7Node: &f{node} &7Risiko: &f{risk}"
+  audit.info.origin: "&7Asal: &f{origin} &7Status: &f{status}"
   audit.ack: "&aTemuan diakui."
   audit.ignore: "&aGrup/user/node ditambahkan ke daftar abaikan audit."
   audit.resolved: "&aTemuan terselesaikan: &f{count}"

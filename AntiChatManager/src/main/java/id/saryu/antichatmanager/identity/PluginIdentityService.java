@@ -52,15 +52,25 @@ public class PluginIdentityService {
     }
 
     public void reloadConfig() {
-        enabled = plugin.getConfigModule().getBoolean("plugin-identity.enabled", true);
-        userAgent = plugin.getConfigModule().getString("plugin-identity.modrinth.user-agent",
-                "Saryu/AntiChatManager/{VERSION} (contact-admin)");
+        var cfg = plugin.getConfigModule();
+        // v7 spec uses auto-blacklist.modrinth; the v7 config file keeps a
+        // dedicated plugin-identity section. Read both so upgrades and custom
+        // configs keep working.
+        enabled = cfg.getBoolean("plugin-identity.enabled",
+                cfg.getBoolean("auto-blacklist.modrinth.enabled", true));
+        userAgent = cfg.getString("plugin-identity.modrinth.user-agent",
+                cfg.getString("auto-blacklist.modrinth.user-agent",
+                        "Saryu/AntiChatManager/{VERSION} (contact-admin)"));
         userAgent = userAgent.replace("{VERSION}", plugin.getBuildInfo().getVersion());
-        String ttl = plugin.getConfigModule().getString("plugin-identity.modrinth.cache-ttl", "7d");
+        String ttl = cfg.getString("plugin-identity.modrinth.cache-ttl",
+                cfg.getString("auto-blacklist.modrinth.cache-ttl", "7d"));
         cacheTtlMs = parseTtl(ttl);
-        hangarFallback = plugin.getConfigModule().getBoolean("plugin-identity.modrinth.hangar-fallback", true);
-        sendOnlyHashes = plugin.getConfigModule().getBoolean("plugin-identity.modrinth.send-only-hashes", true);
-        minConfidence = plugin.getConfigModule().getInt("plugin-identity.min-confidence", 70);
+        hangarFallback = cfg.getBoolean("plugin-identity.modrinth.hangar-fallback",
+                cfg.getBoolean("auto-blacklist.modrinth.hangar-fallback", true));
+        sendOnlyHashes = cfg.getBoolean("plugin-identity.modrinth.send-only-hashes",
+                cfg.getBoolean("auto-blacklist.modrinth.send-only-hashes", true));
+        minConfidence = cfg.getInt("plugin-identity.min-confidence",
+                cfg.getInt("auto-blacklist.min-confidence", 70));
     }
 
     private long parseTtl(String ttl) {
@@ -77,7 +87,7 @@ public class PluginIdentityService {
         reloadConfig();
         if (!enabled) return;
         if (!running.compareAndSet(false, true)) return;
-        plugin.getLib().getSchedulerModule().runSyncLater(this::identifyAll, 100L);
+        plugin.getLib().getSchedulerModule().runSyncLater(() -> identifyAll(false), 100L);
     }
 
     public void stop() {
@@ -86,10 +96,10 @@ public class PluginIdentityService {
 
     public void identifyNow() {
         if (!enabled) return;
-        identifyAll();
+        identifyAll(true);
     }
 
-    private void identifyAll() {
+    private void identifyAll(boolean force) {
         if (!enabled) return;
         List<Plugin> plugins = java.util.Arrays.asList(Bukkit.getPluginManager().getPlugins());
         for (Plugin p : plugins) {
@@ -97,7 +107,7 @@ public class PluginIdentityService {
             String name = p.getName();
             if (name.equals(plugin.getName()) || name.equals("SaryuLibCore")) continue;
             Identity cached = cache.get(name);
-            if (cached != null && cached.expiresAt > System.currentTimeMillis()) continue;
+            if (!force && cached != null && cached.expiresAt > System.currentTimeMillis()) continue;
             identifyPlugin(p);
         }
     }

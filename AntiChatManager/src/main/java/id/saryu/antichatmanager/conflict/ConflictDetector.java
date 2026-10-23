@@ -151,13 +151,17 @@ public class ConflictDetector {
             if (cmd.isBlank()) continue;
             String ignoreKey = cmd;
             if (ignore.contains(ignoreKey)) continue;
+            // Manual/import entries may not carry a permission. Commands
+            // registered with Command#getPermission still produce conflicts.
+            String entryPerm = permissionFor(entry, cmd);
+            if (entryPerm == null || entryPerm.isBlank()) continue;
             for (PermissionModule.HolderSnapshot g : groups) {
                 String gKey = g.name.toLowerCase(Locale.ROOT);
                 if (ignore.contains(ignoreKey + ":" + gKey)) continue;
                 if (isAllowed(cmd, gKey)) continue;
-                // Permission node this command likely needs.
-                String perm = entry.permission;
-                boolean hasPerm = perm != null && !perm.isBlank() ? g.grants(perm) : false;
+                if (entry.allowedGroups.contains(gKey)) continue;
+                String perm = entryPerm;
+                boolean hasPerm = g.grants(perm);
                 if (!hasPerm) continue;
                 if (g.hasBypass("saryuantichatmanager.bypass")) continue;
                 Severity sev = severity(g, cmd, gKey.equals(defaultGroup.toLowerCase(Locale.ROOT)), weight.getOrDefault(gKey, 0), defaultWeight);
@@ -192,6 +196,19 @@ public class ConflictDetector {
                 }
             }
         }
+    }
+
+    private @Nullable String permissionFor(@NotNull BlacklistManager.Entry entry, @NotNull String cmd) {
+        if (entry.permission != null && !entry.permission.isBlank()) return entry.permission;
+        try {
+            org.bukkit.command.Command command = plugin.getServer().getCommandMap().getCommand(cmd);
+            if (command != null && command.getPermission() != null
+                    && !command.getPermission().isBlank()) {
+                return command.getPermission();
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
     }
 
     private boolean isAllowed(String cmd, String group) {

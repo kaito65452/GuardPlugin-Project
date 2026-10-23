@@ -127,10 +127,22 @@ final class AuditSub implements CommandFramework.SubCommand {
     @Override public boolean playerOnly() { return false; }
     @Override public int cooldownSeconds() { return 0; }
     @Override public String description() { return "Permission audit report"; }
-    @Override public String usage() { return "/acm audit [page|info <id>|ack <id>|ignore <group|user> <name>]"; }
+    @Override public String usage() { return "/acm audit [page|info <id>|ack <id>|ignore <group|user|node> <name>]"; }
     @Override public @NotNull List<String> tabComplete(CommandSender sender, String[] args) {
         if (args.length == 1) return filter(List.of("info", "ack", "ignore"), args[0]);
-        if (args.length == 2 && args[0].equalsIgnoreCase("ignore")) return filter(List.of("group", "user"), args[1]);
+        if (args.length == 2 && args[0].equalsIgnoreCase("ignore")) {
+            return filter(List.of("group", "user", "node"), args[1]);
+        }
+        if (args.length == 3 && args[0].equalsIgnoreCase("ignore")) {
+            String type = args[1].toLowerCase(java.util.Locale.ROOT);
+            if (type.equals("group")) {
+                return filter(new ArrayList<>(plugin.getLib().getPermissionModule().getLoadedGroupNames()), args[2]);
+            }
+            if (type.equals("node")) {
+                return filter(new ArrayList<>(plugin.getBlacklist().getAllEntries().stream()
+                        .map(e -> e.permission).filter(java.util.Objects::nonNull).distinct().toList()), args[2]);
+            }
+        }
         return List.of();
     }
     @Override
@@ -140,8 +152,13 @@ final class AuditSub implements CommandFramework.SubCommand {
             return;
         }
         if (args.length >= 3 && args[0].equalsIgnoreCase("ignore")) {
-            boolean user = args[1].equalsIgnoreCase("user");
-            plugin.getPermissionAudit().ignore(args[2], user);
+            String type = args[1].toLowerCase(java.util.Locale.ROOT);
+            if (!type.equals("group") && !type.equals("user") && !type.equals("node")
+                    && !type.equals("permission") && !type.equals("perm")) {
+                send(sender, "audit.usage", "&7Usage: &f/acm audit ignore <group|user|node> <name>");
+                return;
+            }
+            plugin.getPermissionAudit().ignore(args[2], type);
             send(sender, "audit.ignore", "&aSubject/node added to audit ignore list.");
             return;
         }
@@ -160,9 +177,16 @@ final class AuditSub implements CommandFramework.SubCommand {
                 if (f == null) { send(sender, "audit.empty", "&7No open audit findings."); return; }
                 String title = plugin.getLang().message("audit.info.title", "&b=== Audit Finding #{id} ===").replace("{id}", String.valueOf(id));
                 sender.sendMessage(plugin.getMsg().parse(title));
-                sender.sendMessage(plugin.getMsg().parse("&7Type: &f" + f.subjectType + " &7Subject: &f" + f.subjectName));
-                sender.sendMessage(plugin.getMsg().parse("&7Node: &f" + f.node + " &7Risk: &f" + f.risk));
-                sender.sendMessage(plugin.getMsg().parse("&7Origin: &f" + f.origin + " &7Status: &f" + f.status));
+                sender.sendMessage(plugin.getMsg().parse(plugin.getLang().message("audit.info.type",
+                        "&7Type: &f{type} &7Subject: &f{subject}")
+                        .replace("{type}", f.subjectType).replace("{subject}", f.subjectName)));
+                sender.sendMessage(plugin.getMsg().parse(plugin.getLang().message("audit.info.node",
+                        "&7Node: &f{node} &7Risk: &f{risk}")
+                        .replace("{node}", f.node).replace("{risk}", f.risk.name())));
+                sender.sendMessage(plugin.getMsg().parse(plugin.getLang().message("audit.info.origin",
+                        "&7Origin: &f{origin} &7Status: &f{status}")
+                        .replace("{origin}", f.origin == null ? "-" : f.origin)
+                        .replace("{status}", f.status)));
             } catch (Exception ignored) { send(sender, "audit.usage", "&7Usage: &f/acm audit [info|ack|ignore]"); }
             return;
         }

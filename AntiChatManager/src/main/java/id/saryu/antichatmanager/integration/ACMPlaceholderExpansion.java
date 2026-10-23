@@ -21,12 +21,23 @@ public final class ACMPlaceholderExpansion extends PlaceholderExpansion {
 
     @Override
     public String onRequest(OfflinePlayer player, @NotNull String params) {
+        org.bukkit.entity.Player online = player == null ? null
+                : (player.isOnline() ? player.getPlayer() : null);
         return switch (params.toLowerCase(java.util.Locale.ROOT)) {
             case "version" -> plugin.getBuildInfo().getVersion();
-            case "language" -> plugin.getLang().getActiveCode();
+            case "language" -> online != null
+                    ? plugin.getLang().getPlayerCode(online) : plugin.getLang().getActiveCode();
             case "blacklist_count" -> String.valueOf(plugin.getBlacklist().getAllEntries().size());
+            case "violations" -> player == null ? "0"
+                    : String.valueOf(plugin.getPunishmentTracker()
+                    .getMemoryCount(player.getUniqueId().toString()));
+            case "bypass" -> online == null ? "false" : String.valueOf(plugin.canBypass(online));
             case "conflicts_open" -> String.valueOf(plugin.getConflictDetector() == null
                     ? 0 : plugin.getConflictDetector().getOpen().size());
+            case "conflicts_critical" -> String.valueOf(plugin.getConflictDetector() == null
+                    ? 0 : plugin.getConflictDetector().getOpen().stream()
+                    .filter(c -> c.severity == id.saryu.antichatmanager.conflict.ConflictDetector.Severity.CRITICAL)
+                    .count());
             case "audit_open" -> String.valueOf(plugin.getPermissionAudit() == null
                     ? 0 : plugin.getPermissionAudit().getOpen().size());
             default -> null;

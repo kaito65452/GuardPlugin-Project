@@ -162,7 +162,7 @@ messages:
   plugins.header: "&b=== Plugin Identity ==="
   plugins.line: "&7{plugin} &8- &f{status} &7(conf={confidence}%) {project}"
   plugins.empty: "&7No plugin identity data yet. Run &f/acm scan identify&7."
-  plugins.identify.done: "&aPlugin identification complete."
+  plugins.identify.done: "&aPlugin identification started in the background; use &f/acm plugins&a for results."
 
   # --- Conflicts ---
   conflicts.usage: "&7Usage: &f/acm conflicts [page]"
@@ -175,11 +175,14 @@ messages:
   conflicts.action.blocked: "&cThis action requires &fsaryuantichatmanager.admin&c."
 
   # --- Audit ---
-  audit.usage: "&7Usage: &f/acm audit [info|ack|ignore]"
+  audit.usage: "&7Usage: &f/acm audit [info|ack|ignore <group|user|node> <name>]"
   audit.empty: "&7No open audit findings."
   audit.header: "&b=== Permission Audit (page {page}/{total}) ==="
   audit.line: "&7[{severity}] &f{subject} ({type}) &7has &f{node} &8origin={origin}"
   audit.info.title: "&b=== Audit Finding #{id} ==="
+  audit.info.type: "&7Type: &f{type} &7Subject: &f{subject}"
+  audit.info.node: "&7Node: &f{node} &7Risk: &f{risk}"
+  audit.info.origin: "&7Origin: &f{origin} &7Status: &f{status}"
   audit.ack: "&aFinding acknowledged."
   audit.ignore: "&aSubject/node added to audit ignore list."
   audit.resolved: "&aResolved findings: &f{count}"

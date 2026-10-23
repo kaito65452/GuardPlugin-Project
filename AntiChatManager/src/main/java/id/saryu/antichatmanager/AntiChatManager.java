@@ -61,6 +61,8 @@ public class AntiChatManager extends JavaPlugin {
     private ACMCommand acmCommand;
     private CommandHandler commandHandler;
     private RateLimitModule rateLimit;
+    private final java.util.concurrent.atomic.AtomicBoolean luckPermsRescanQueued =
+            new java.util.concurrent.atomic.AtomicBoolean();
 
     @Override
     public void onEnable() {
@@ -126,6 +128,7 @@ public class AntiChatManager extends JavaPlugin {
         pluginIdentityService.start();
         conflictDetector.start();
         permissionAudit.start();
+        registerLuckPermsListener();
 
         if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
             try {
@@ -149,6 +152,7 @@ public class AntiChatManager extends JavaPlugin {
         if (pluginIdentityService != null) pluginIdentityService.stop();
         if (conflictDetector != null) conflictDetector.stop();
         if (permissionAudit != null) permissionAudit.stop();
+        if (lib != null) lib.getPermissionModule().unregisterChangeListeners();
         if (packetInterceptor != null && lib != null) {
             lib.getPacketLayer().unregisterCommandInterceptor(packetInterceptor);
         }
@@ -185,6 +189,27 @@ public class AntiChatManager extends JavaPlugin {
     public AuditLog getAuditLog() { return auditLog; }
     public id.saryu.antichatmanager.api.AntiChatManagerAPI getApi() {
         return new id.saryu.antichatmanager.api.AntiChatManagerAPI(this);
+    }
+
+    private void registerLuckPermsListener() {
+        int count = lib.getPermissionModule().registerChangeListener(this::queueLuckPermsRescan);
+        if (count > 0) {
+            getLogger().info("LuckPerms mutations will trigger a debounced conflict/audit rescan.");
+        }
+    }
+
+    private void queueLuckPermsRescan() {
+        if (!luckPermsRescanQueued.compareAndSet(false, true)) return;
+        lib.getSchedulerModule().runSyncLater(() -> {
+            luckPermsRescanQueued.set(false);
+            try {
+                if (conflictDetector != null) conflictDetector.scan();
+                if (permissionAudit != null) permissionAudit.scan();
+            } catch (Throwable t) {
+                getLogger().log(java.util.logging.Level.FINE,
+                        "LuckPerms-triggered rescan failed: " + t.getMessage(), t);
+            }
+        }, 100L);
     }
 
     /** Reload every runtime component; used by /acm reload and the public API. */
