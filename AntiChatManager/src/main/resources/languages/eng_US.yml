@@ -1,0 +1,136 @@
+# AntiChatManager - English (default)
+language:
+  name: English
+  code: eng_US
+
+prefix: "&7[&bACM&7] &r"
+
+messages:
+  # --- Generic ---
+  reload: "&aAntiChatManager configuration reloaded."
+  noperm: "&cYou do not have permission to use this command."
+  playeronly: "&cThis command can only be used by a player."
+  unknown: "&cUnknown subcommand: &7{sub}"
+  usage: "&7Usage: &f{usage}"
+
+  # --- Security ---
+  security.rate-limit.kick: "&cToo many requests. Please slow down."
+
+  # --- Help ---
+  help.header: "&b=== AntiChatManager Commands ==="
+  help.line: "&7/{cmd} &f{sub} &8- &7{desc}"
+
+  # --- Info ---
+  info.title: "&b=== AntiChatManager v{version} ==="
+  info.db: "&7Database: &f{type} &7(available={available}, schema=v{schema})"
+  info.entries: "&7Blacklist entries: &f{count} &7(manual={manual}, plugin={plugin}, luckperms={lp}, import={imp})"
+  info.packet: "&7Packet layer: &f{backend} &7(active={active})"
+  info.luckperms: "&7LuckPerms: &f{available}"
+  info.language: "&7Language: &f{code} &7(per-player={perplayer})"
+  info.scan: "&7Auto-scan: &f{enabled} &7(dry-run={dry}, last={last})"
+  info.provider: "&7Ban provider: &f{provider}"
+
+  # --- Scan ---
+  scan.done: "&aScan finished: &f{count}&a blacklist entries total."
+  scan.report.empty: "&7No scan report yet. Run &f/acm scan&7."
+  scan.report.none: "&7The last scan added no new commands; everything is already blacklisted."
+  scan.report.header: "&b=== Last Auto-Scan Report ({count}) ==="
+  scan.report.line: "&7{command} &8[{source}] &7plugin={plugin} perm={permission} added={added}"
+  scan.sources.empty: "&7No commands were added by the last scan."
+  scan.sources.header: "&b=== Auto-Scan Sources ==="
+  scan.sources.line: "&7{name}: &f{count} new entries"
+  scan.staff-alert: "&aAuto-scan found &7{count}&a new command(s) to blacklist."
+
+  # --- Blacklist ---
+  blacklist.usage: "&7Usage: &f/{label} blacklist <list|check|info|add|remove|whitelist|purge>"
+  blacklist.list.badsource: "&cUnknown source. Use MANUAL, PLUGIN_SCAN, LUCKPERMS_SCAN or IMPORT."
+  blacklist.list.empty: "&cNo blacklist entries found."
+  blacklist.list.header: "&b=== Blacklist Entries (page {page}/{total}) &7- {count} total"
+  blacklist.list.entry: "&7#{id} &f{command} &7[{mode}] &8source={source} plugin={plugin} added_by={addedby}"
+  blacklist.list.footer: "&7Use &f/{label} blacklist info <id> &7for details."
+  blacklist.check.usage: "&7Usage: &f/acm blacklist check <command>"
+  blacklist.check.free: "&a&f{command} &ais not blacklisted."
+  blacklist.check.title: "&b=== Blacklist Check: &f{command}"
+  blacklist.check.matched: "&7Matched: &f{matched}"
+  blacklist.info.usage: "&7Usage: &f/acm blacklist info <id|command>"
+  blacklist.notfound: "&cNo blacklist entry found for &7{command}."
+  blacklist.info.title: "&b=== Blacklist Entry #{id} ==="
+  blacklist.info.line: "&7  {key}: &f{value}"
+  blacklist.add.usage: "&7Usage: &f/acm blacklist add <command> [mode] [reason...]"
+  blacklist.add.exists: "&c&f{command} &cis already blacklisted."
+  blacklist.added: "&aAdded &7{command} &ato the blacklist (source: {source}, mode: {mode})."
+  blacklist.remove.usage: "&7Usage: &f/acm blacklist remove <id|command>"
+  blacklist.removed: "&aRemoved &7{count} &aentry/entries for &7{command}&a."
+  blacklist.whitelist.usage: "&7Usage: &f/acm blacklist whitelist <command>"
+  blacklist.whitelist.none: "&7No auto-scan entries found for &f{command}&7."
+  blacklist.whitelist.done: "&aRemoved &f{count} &aauto-scan entries for &f{command}&a. Add it to auto-blacklist.exclude.commands to keep it that way."
+  blacklist.purge: "&aPurged &f{count} &aauto-scan entries that no longer match a registered command."
+
+  # --- History ---
+  history.usage: "&7Usage: &f/acm history <player> [page]"
+  history.empty: "&7No violation history for &f{player}&7."
+  history.header: "&b=== Violation History: &f{player} &7(page {page})"
+  history.line: "&7{time} &8| &f{command} &8| &7world={world} source={source}"
+
+  # --- Violations ---
+  violations.usage: "&7Usage: &f/acm violations [reset] <player>"
+  violations.reset: "&aViolation count reset for &f{player}&a."
+  violations.header: "&b=== Violations: &f{player}"
+  violations.line: "&7  {key}: &f{value}"
+
+  # --- Templates ---
+  template.usage: "&7Usage: &f/acm template <list|set|preview> <name>"
+  template.list.header: "&b=== Alert Templates &7(active: {active}&7)"
+  template.list.line: "&7- &f{name}"
+  template.notfound: "&cUnknown template: &7{name}"
+  template.set: "&aAlert template set to &f{name}&a."
+  template.preview.header: "&b=== Preview: &f{name}"
+
+  # --- Language ---
+  language.usage: "&7Usage: &f/acm language [list|set <code>]"
+  language.header: "&b=== Language &7(active: {active}&7)"
+  language.line: "&7- &f{code}"
+  language.notfound: "&cUnknown language: &7{code}"
+  language.set: "&aLanguage set to &f{code}&a."
+
+  # --- Export / import ---
+  export.done: "&aExported &f{count} &aentries to &f{file}&a."
+  export.failed: "&cExport failed: {error}"
+  import.usage: "&7Usage: &f/acm import <file>"
+  import.notfound: "&cFile not found: &f{file}"
+  import.done: "&aImported &f{added} &aentries (&f{skipped} &askipped as duplicates)."
+
+  # --- Alerts / punishment (config-driven strings also exist) ---
+  alert.broadcast: "&7[Alert] &7{PLAYER} &fwas detected trying to use &7{CMDBLACKLIST} &fon {TIME}"
+  punishment.warn: "&cWarning {COUNT}/{LIMIT}: do not use blacklisted commands."
+  punishment.kick: "&cYou have been kicked for repeated use of blacklisted commands."
+  punishment.ban: "&cYou have been banned for {DURATION}. Reason: {REASON}"
+  punishment.reset: "&aViolation count reset for &7{player}."
+
+errors:
+  internal: "&cAn internal error occurred. Check the console."
+  db.unavailable: "&cDatabase unavailable; running in limited mode."
+  config.invalid: "&cInvalid configuration: {msg}"
+  duration.invalid: "&cInvalid duration format: &7{value}"
+
+# Alert templates (selected with alert.template in config.yml).
+# Variables: {PLAYER} {CMDBLACKLIST} {INPUT} {NAMESERVER} {TIME} {WORLD} {SOURCE}
+templates:
+  boxed: |
+    <#FF5555>=================================
+    <#FFFFFF>{PLAYER} <#AAAAAA>was detected trying to use
+    <#FFAA00>{CMDBLACKLIST} <#AAAAAA>on <#FFFFFF>{TIME}
+    <#5555FF>[{NAMESERVER}]
+    <#FF5555>=================================
+  minimal: |
+    <#5555FF>[{NAMESERVER}] <#FFFFFF>{PLAYER} <#AAAAAA>tried <#FFAA00>{CMDBLACKLIST}
+  banner: |
+    <gradient:#FF0000:#FFAA00>━━━━━ {NAMESERVER} ━━━━━</gradient>
+    <#FFFFFF>{PLAYER} <#AAAAAA>blocked from <#FFAA00>{CMDBLACKLIST}
+    <#AAAAAA>{TIME} • {WORLD}
+  modern: |
+    <gradient:#00C6FF:#0072FF>▎{NAMESERVER}</gradient>
+    <#FFFFFF>▎ {PLAYER} <#AAAAAA>attempted <#FFAA00>{CMDBLACKLIST}
+    <#555555>▎ {TIME}
+  compact: |
+    <#FF5555>⚠ <#FFFFFF>{PLAYER} <#AAAAAA>→ <#FFAA00>{CMDBLACKLIST} <#555555>({TIME})

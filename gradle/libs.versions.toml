@@ -1,0 +1,37 @@
+# Version catalog for the SaryuLibCore + AntiChatManager multi-project build.
+# Target: PaperMC 1.21 - 26.3, Java 21 bytecode.
+
+[versions]
+paper = "1.21-R0.1-SNAPSHOT"
+adventure = "4.13.0"
+hikaricp = "5.1.0"
+sqlite = "3.45.2.0"
+h2 = "2.2.224"
+mysql = "8.4.0"
+luckperms = "2.1.29"
+placeholderapi = "2.11.5"
+floodgate = "4.0.1-beta.1"
+packetevents = "2.11.2"
+shadow = "8.1.1"
+
+[libraries]
+# --- Paper / Adventure ---
+paper-api = { group = "io.papermc.paper", name = "paper-api", version.ref = "paper" }
+adventure-minimessage = { group = "net.kyori", name = "adventure-text-minimessage", version.ref = "adventure" }
+adventure-platform-paper = { group = "net.kyori", name = "adventure-platform-paper", version.ref = "adventure" }
+adventure-serializer-json = { group = "net.kyori", name = "adventure-text-serializer-gson", version.ref = "adventure" }
+
+# --- Database ---
+hikaricp = { group = "com.zaxxer", name = "HikariCP", version.ref = "hikaricp" }
+sqlite-jdbc = { group = "org.xerial", name = "sqlite-jdbc", version.ref = "sqlite" }
+h2 = { group = "com.h2database", name = "h2", version.ref = "h2" }
+mysql-connector-j = { group = "com.mysql", name = "mysql-connector-j", version.ref = "mysql" }
+
+# --- Optional integrations (compileOnly) ---
+luckperms-api = { group = "net.luckperms", name = "api", version.ref = "luckperms" }
+placeholderapi = { group = "me.clip", name = "placeholderapi", version.ref = "placeholderapi" }
+floodgate-api = { group = "org.geysermc.floodgate", name = "floodgate-api", version.ref = "floodgate" }
+packetevents-api = { group = "com.github.retrooper", name = "packetevents-api", version.ref = "packetevents" }
+
+[plugins]
+shadow = { id = "com.github.johnrengelman.shadow", version.ref = "shadow" }

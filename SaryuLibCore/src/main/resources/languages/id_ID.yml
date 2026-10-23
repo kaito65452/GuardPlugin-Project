@@ -1,0 +1,15 @@
+# Bahasa Indonesia untuk SaryuLibCore
+language:
+  name: Bahasa Indonesia
+  code: id_ID
+
+messages:
+  prefix: "&7[&bSaryuLib&7] &r"
+  reloaded: "&aKonfigurasi berhasil di-reload."
+  noperm: "&cKamu tidak memiliki izin untuk menggunakan perintah ini."
+  playeronly: "&cPerintah ini hanya dapat digunakan oleh pemain."
+  unknown: "&cSubperintah tidak diketahui: &7{sub}"
+  db.unavailable: "&cDatabase tidak tersedia; berjalan dalam mode offline."
+
+errors:
+  internal: "&cTerjadi kesalahan internal. Periksa konsol."

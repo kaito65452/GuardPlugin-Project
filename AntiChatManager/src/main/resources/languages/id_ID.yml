@@ -1,0 +1,136 @@
+# AntiChatManager - Bahasa Indonesia
+language:
+  name: Bahasa Indonesia
+  code: id_ID
+
+prefix: "&7[&bACM&7] &r"
+
+messages:
+  # --- Umum ---
+  reload: "&aKonfigurasi AntiChatManager berhasil di-reload."
+  noperm: "&cKamu tidak memiliki izin untuk menggunakan perintah ini."
+  playeronly: "&cPerintah ini hanya dapat digunakan oleh pemain."
+  unknown: "&cSubperintah tidak diketahui: &7{sub}"
+  usage: "&7Penggunaan: &f{usage}"
+
+  # --- Keamanan ---
+  security.rate-limit.kick: "&cTerlalu banyak permintaan. Mohon perlambat."
+
+  # --- Bantuan ---
+  help.header: "&b=== Daftar Perintah AntiChatManager ==="
+  help.line: "&7/{cmd} &f{sub} &8- &7{desc}"
+
+  # --- Info ---
+  info.title: "&b=== AntiChatManager v{version} ==="
+  info.db: "&7Database: &f{type} &7(tersedia={available}, skema=v{schema})"
+  info.entries: "&7Entri blacklist: &f{count} &7(manual={manual}, plugin={plugin}, luckperms={lp}, impor={imp})"
+  info.packet: "&7Lapisan paket: &f{backend} &7(aktif={active})"
+  info.luckperms: "&7LuckPerms: &f{available}"
+  info.language: "&7Bahasa: &f{code} &7(per-pemain={perplayer})"
+  info.scan: "&7Pemindaian otomatis: &f{enabled} &7(dry-run={dry}, terakhir={last})"
+  info.provider: "&7Penyedia ban: &f{provider}"
+
+  # --- Pemindaian ---
+  scan.done: "&aPemindaian selesai: total &f{count}&a entri blacklist."
+  scan.report.empty: "&7Belum ada laporan pemindaian. Jalankan &f/acm scan&7."
+  scan.report.none: "&7Pemindaian terakhir tidak menambahkan perintah baru; semuanya sudah masuk daftar hitam."
+  scan.report.header: "&b=== Laporan Pemindaian Terakhir ({count}) ==="
+  scan.report.line: "&7{command} &8[{source}] &7plugin={plugin} izin={permission} ditambahkan={added}"
+  scan.sources.empty: "&7Tidak ada perintah yang ditambahkan pada pemindaian terakhir."
+  scan.sources.header: "&b=== Sumber Pemindaian Otomatis ==="
+  scan.sources.line: "&7{name}: &f{count} entri baru"
+  scan.staff-alert: "&aPemindaian otomatis menemukan &7{count}&a perintah baru untuk daftar hitam."
+
+  # --- Blacklist ---
+  blacklist.usage: "&7Penggunaan: &f/{label} blacklist <list|check|info|add|remove|whitelist|purge>"
+  blacklist.list.badsource: "&cSumber tidak diketahui. Gunakan MANUAL, PLUGIN_SCAN, LUCKPERMS_SCAN, atau IMPORT."
+  blacklist.list.empty: "&cTidak ada entri blacklist yang ditemukan."
+  blacklist.list.header: "&b=== Entri Blacklist (halaman {page}/{total}) &7- {count} total"
+  blacklist.list.entry: "&7#{id} &f{command} &7[{mode}] &8sumber={source} plugin={plugin} ditambahkan_oleh={addedby}"
+  blacklist.list.footer: "&7Gunakan &f/{label} blacklist info <id> &7untuk detail."
+  blacklist.check.usage: "&7Penggunaan: &f/acm blacklist check <perintah>"
+  blacklist.check.free: "&a&f{command} &atidak ada dalam daftar hitam."
+  blacklist.check.title: "&b=== Pemeriksaan Blacklist: &f{command}"
+  blacklist.check.matched: "&7Cocok dengan: &f{matched}"
+  blacklist.info.usage: "&7Penggunaan: &f/acm blacklist info <id|perintah>"
+  blacklist.notfound: "&cTidak ada entri daftar hitam untuk &7{command}."
+  blacklist.info.title: "&b=== Entri Blacklist #{id} ==="
+  blacklist.info.line: "&7  {key}: &f{value}"
+  blacklist.add.usage: "&7Penggunaan: &f/acm blacklist add <perintah> [mode] [alasan...]"
+  blacklist.add.exists: "&c&f{command} &csudah ada dalam daftar hitam."
+  blacklist.added: "&aMenambahkan &7{command} &ake daftar hitam (sumber: {source}, mode: {mode})."
+  blacklist.remove.usage: "&7Penggunaan: &f/acm blacklist remove <id|perintah>"
+  blacklist.removed: "&aMenghapus &7{count} &aentri untuk &7{command}&a."
+  blacklist.whitelist.usage: "&7Penggunaan: &f/acm blacklist whitelist <perintah>"
+  blacklist.whitelist.none: "&7Tidak ada entri hasil pemindaian otomatis untuk &f{command}&7."
+  blacklist.whitelist.done: "&aMenghapus &f{count} &aentri hasil pemindaian untuk &f{command}&a. Tambahkan ke auto-blacklist.exclude.commands agar tidak muncul lagi."
+  blacklist.purge: "&aMembersihkan &f{count} &aentri hasil pemindaian yang perintahnya sudah tidak terdaftar."
+
+  # --- Riwayat ---
+  history.usage: "&7Penggunaan: &f/acm history <pemain> [halaman]"
+  history.empty: "&7Tidak ada riwayat pelanggaran untuk &f{player}&7."
+  history.header: "&b=== Riwayat Pelanggaran: &f{player} &7(halaman {page})"
+  history.line: "&7{time} &8| &f{command} &8| &7dunia={world} sumber={source}"
+
+  # --- Pelanggaran ---
+  violations.usage: "&7Penggunaan: &f/acm violations [reset] <pemain>"
+  violations.reset: "&aJumlah pelanggaran untuk &f{player} &atelah direset."
+  violations.header: "&b=== Pelanggaran: &f{player}"
+  violations.line: "&7  {key}: &f{value}"
+
+  # --- Template ---
+  template.usage: "&7Penggunaan: &f/acm template <list|set|preview> <nama>"
+  template.list.header: "&b=== Template Alert &7(aktif: {active}&7)"
+  template.list.line: "&7- &f{name}"
+  template.notfound: "&cTemplate tidak ditemukan: &7{name}"
+  template.set: "&aTemplate alert diatur ke &f{name}&a."
+  template.preview.header: "&b=== Pratinjau: &f{name}"
+
+  # --- Bahasa ---
+  language.usage: "&7Penggunaan: &f/acm language [list|set <kode>]"
+  language.header: "&b=== Bahasa &7(aktif: {active}&7)"
+  language.line: "&7- &f{code}"
+  language.notfound: "&cBahasa tidak ditemukan: &7{code}"
+  language.set: "&aBahasa diatur ke &f{code}&a."
+
+  # --- Ekspor / impor ---
+  export.done: "&aBerhasil mengekspor &f{count} &aentri ke &f{file}&a."
+  export.failed: "&cEkspor gagal: {error}"
+  import.usage: "&7Penggunaan: &f/acm import <file>"
+  import.notfound: "&cFile tidak ditemukan: &f{file}"
+  import.done: "&aBerhasil mengimpor &f{added} &aentri (&f{skipped} &adilewati karena duplikat)."
+
+  # --- Alert / hukuman (teks dari config juga tersedia) ---
+  alert.broadcast: "&7[Peringatan] &7{PLAYER} &ftertangkap mencoba menggunakan &7{CMDBLACKLIST} &fpada {TIME}"
+  punishment.warn: "&cPeringatan {COUNT}/{LIMIT}: jangan gunakan perintah yang termasuk daftar hitam."
+  punishment.kick: "&cKamu telah ditendang karena penggunaan berulang perintah daftar hitam."
+  punishment.ban: "&cKamu telah diblokir selama {DURATION}. Alasan: {REASON}."
+  punishment.reset: "&aJumlah pelanggaran untuk &7{player} &adireset."
+
+errors:
+  internal: "&cTerjadi kesalahan internal. Periksa konsol."
+  db.unavailable: "&cDatabase tidak tersedia; berjalan dalam mode terbatas."
+  config.invalid: "&cKonfigurasi tidak valid: {msg}"
+  duration.invalid: "&cFormat durasi tidak valid: &7{value}"
+
+# Template alert (dipilih lewat alert.template di config.yml).
+# Variabel: {PLAYER} {CMDBLACKLIST} {INPUT} {NAMESERVER} {TIME} {WORLD} {SOURCE}
+templates:
+  boxed: |
+    <#FF5555>=================================
+    <#FFFFFF>{PLAYER} <#AAAAAA>terdeteksi mencoba menggunakan
+    <#FFAA00>{CMDBLACKLIST} <#AAAAAA>pada <#FFFFFF>{TIME}
+    <#5555FF>[{NAMESERVER}]
+    <#FF5555>=================================
+  minimal: |
+    <#5555FF>[{NAMESERVER}] <#FFFFFF>{PLAYER} <#AAAAAA>mencoba <#FFAA00>{CMDBLACKLIST}
+  banner: |
+    <gradient:#FF0000:#FFAA00>━━━━━ {NAMESERVER} ━━━━━</gradient>
+    <#FFFFFF>{PLAYER} <#AAAAAA>diblokir dari <#FFAA00>{CMDBLACKLIST}
+    <#AAAAAA>{TIME} • {WORLD}
+  modern: |
+    <gradient:#00C6FF:#0072FF>▎{NAMESERVER}</gradient>
+    <#FFFFFF>▎ {PLAYER} <#AAAAAA>mencoba <#FFAA00>{CMDBLACKLIST}
+    <#555555>▎ {TIME}
+  compact: |
+    <#FF5555>⚠ <#FFFFFF>{PLAYER} <#AAAAAA>→ <#FFAA00>{CMDBLACKLIST} <#555555>({TIME})

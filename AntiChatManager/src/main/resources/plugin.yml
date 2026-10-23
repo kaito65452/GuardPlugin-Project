@@ -1,0 +1,29 @@
+name: AntiChatManager
+version: 3.0.1
+api-version: '1.21'
+main: id.saryu.antichatmanager.AntiChatManager
+description: Advanced chat and command management with blacklist, auto-scan, alerts, and punishments.
+author: Saryu
+website: https://github.com/saryu
+depend: [SaryuLibCore]
+softdepend: [LuckPerms, PlaceholderAPI, Floodgate, PacketEvents]
+load: POSTWORLD
+
+commands:
+  acm:
+    description: AntiChatManager administration command.
+    usage: /acm help
+    aliases: [antichatmanager]
+    permission: saryuantichatmanager.admin
+    permission-message: You do not have permission to use AntiChatManager.
+
+permissions:
+  saryuantichatmanager.admin:
+    description: Full access to /acm and all management subcommands.
+    default: op
+  saryuantichatmanager.bypass:
+    description: Bypass the command blacklist and see all commands in tab completion.
+    default: op
+  saryuantichatmanager.alerts:
+    description: Receive staff alerts when a blacklisted command is attempted.
+    default: op

@@ -1,0 +1,142 @@
+# AntiChatManager configuration
+# Edit carefully; invalid values will be logged and safe defaults used.
+
+# Config schema version (auto-migrated by SaryuLibCore).
+config:
+  version: 1
+
+# Language file code (eng_US | id_ID). Fallback to eng_US if missing keys.
+language: eng_US
+# Use the client locale per player when a matching language file exists.
+language-per-player: false
+
+# Prefix prepended to plugin messages.
+prefix: "&7[&bACM&7]"
+
+# Timezone used in alerts and logs: WIB | WITA | WIT | UTC
+timezone: WIB
+
+# --- Blacklist ---
+blacklist:
+  enabled: true
+  # Whether OP players bypass the blacklist.
+  bypass:
+    allow-op: true
+  # Sources allowed to run blacklisted commands (console always allowed).
+  sources:
+    command-block: false
+    rcon: false
+  # Maximum command length before rejection.
+  max-command-length: 256
+
+# --- Alerts ---
+alert:
+  enabled: true
+  # Template name: boxed | minimal | banner | modern | compact
+  template: boxed
+  # Broadcast target: global | staff-only | player-only
+  broadcast-target: global
+  # Custom server name label used in {NAMESERVER}.
+  server-name: "Server Security"
+  # Sound played with alert (Bukkit Sound name, empty = none).
+  sound: "BLOCK_NOTE_BLOCK_HAT"
+  # Whether staff-only alerts go to players with saryuantichatmanager.alerts.
+  staff-only-permission: "saryuantichatmanager.alerts"
+
+# Alert templates are stored in languages/<code>.yml under `templates:`.
+# Add a `templates:` section here only if you want to override them per install.
+
+# --- Auto-blacklist (plugin + LuckPerms scan) ---
+auto-blacklist:
+  enabled: true
+  # Report only, do not apply blacklist entries.
+  dry-run: false
+  # Heuristic keyword detection (admin, staff, op, reload, give, gamemode...).
+  heuristic-enabled: true
+  # Include admin-only vanilla commands (op, gamemode, give, tp, stop, ...).
+  vanilla-enabled: true
+  # LuckPerms settings.
+  luckperms:
+    enabled: true
+    scan-interval-minutes: 30
+    default-group: default
+    staff-min-weight: 50
+  # Commands/permissions/plugins to exclude from auto-blacklist.
+  exclude:
+    plugins: []
+    commands: [help, spawn, msg, tpa, home, rules, ping]
+    permissions: []
+
+# --- Punishment escalation ---
+punishment:
+  enabled: true
+  count-mode: global          # global | per-command
+  count-window: 60m           # 0 = lifetime
+  persist: true
+  reset-after-ban: true
+  steps:
+    - violations: 3
+      action: WARN
+      message: "&cWarning {COUNT}/{LIMIT}: do not use blacklisted commands."
+    - violations: 5
+      action: KICK
+      reason: "&cRepeated use of blacklisted commands ({COUNT}x)"
+    - violations: 8
+      action: BAN
+      duration: 1d
+      reason: "&cAbusing blacklisted commands ({COUNT}x)"
+    - violations: 15
+      action: BAN
+      duration: perm
+      reason: "&cPersistent abuse of blacklisted commands"
+  per-command-overrides:
+    "op":
+      violations: 1
+      action: BAN
+      duration: 7d
+
+# --- Ban provider ---
+ban:
+  provider: AUTO        # AUTO | LITEBANS | LIBERTYBANS | ADVANCEDBAN | BANMANAGER | ESSENTIALS | VANILLA | CUSTOM
+  fallback-chain: true
+  custom:
+    ban: "ban {PLAYER} {REASON}"
+    tempban: "tempban {PLAYER} {DURATION} {REASON}"
+    kick: "kick {PLAYER} {REASON}"
+
+# --- Database ---
+database:
+  type: SQLITE            # MYSQL | H2 | SQLITE
+  host: 127.0.0.1
+  port: 3306
+  database: antichatmanager
+  user: root
+  password: ""
+  ssl: false
+  pool-size: 10
+  # Days to retain violation/scan history (0 = keep forever).
+  retention-days: 30
+
+# --- Security ---
+security:
+  # Maximum command length before rejection (also blacklist.max-command-length).
+  max-command-length: 256
+  rate-limit:
+    enabled: true
+    commands-per-minute: 60
+    chat-per-minute: 20
+    tab-completes-per-minute: 120
+    action: cancel        # cancel | kick | log-only
+  block-control-chars: true
+  block-raw-section: true
+  block-zero-width: true
+
+# --- Webhook (Discord) ---
+webhook:
+  enabled: false
+  url: ""
+  # Events to send: violation, punishment, scan
+  events: [violation, punishment, scan]
+
+# --- Debug ---
+debug: false

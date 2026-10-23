@@ -1,0 +1,323 @@
+package id.saryu.libcore.permission;
+
+import id.saryu.libcore.SaryuLib;
+import org.bukkit.command.Command;
+import org.bukkit.command.PluginCommand;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.logging.Level;
+
+/**
+ * Permission helpers: scan installed plugins' plugin.yml permissions and each
+ * command's permission, plus LuckPerms group weight/track (via reflection, since
+ * LuckPerms is an optional softdepend), to determine whether a permission is
+ * "above member" (staff/admin). Used by auto-blacklist.
+ */
+public class PermissionModule {
+
+    private final SaryuLib plugin;
+    private final Set<String> adminKeywords = new HashSet<>();
+    private final Set<String> memberSafeCommands = new HashSet<>();
+    private final boolean luckpermsAvailable;
+
+    public PermissionModule(@NotNull SaryuLib plugin) {
+        this.plugin = plugin;
+        this.luckpermsAvailable = classPresent("net.luckperms.api.LuckPerms");
+        if (luckpermsAvailable) {
+            plugin.getLogger().info("LuckPerms API detected; LuckPerms scanning enabled.");
+        }
+
+        // Default admin keywords (heuristic, can be disabled by the caller).
+        adminKeywords.add("admin");
+        adminKeywords.add("staff");
+        adminKeywords.add("moderator");
+        adminKeywords.add("manage");
+        adminKeywords.add("reload");
+        adminKeywords.add("gamemode");
+        adminKeywords.add("whitelist");
+        adminKeywords.add("bypass");
+    }
+
+    private static boolean classPresent(String name) {
+        try {
+            Class.forName(name);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    public void addAdminKeyword(String k) {
+        adminKeywords.add(k.toLowerCase(Locale.ROOT));
+    }
+
+    public void addMemberSafeCommand(String c) {
+        memberSafeCommands.add(c.toLowerCase(Locale.ROOT));
+    }
+
+    public boolean hasLuckPerms() {
+        return luckpermsAvailable;
+    }
+
+    /**
+     * Whether a permission string looks like an admin-level permission.
+     */
+    public boolean isAdminPermission(@NotNull String perm) {
+        if (perm == null || perm.isEmpty()) return false;
+        String p = perm.toLowerCase(Locale.ROOT);
+        if (memberSafeCommands.contains(p)) return false;
+        if (p.equals("*") || p.contains(".*")) return true;
+        for (String k : adminKeywords) {
+            if (p.contains(k)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Scan a plugin's declared permissions for admin-level ones.
+     */
+    public @NotNull Set<String> scanPluginPermissions(@NotNull Plugin plugin) {
+        Set<String> found = new HashSet<>();
+        org.bukkit.plugin.PluginDescriptionFile desc = plugin.getDescription();
+        // desc.getPermissions() has changed shape between Paper versions:
+        // older builds return Map<String, Permission>, newer ones List<Permission>.
+        Object raw = desc.getPermissions();
+        if (raw instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                String name = String.valueOf(entry.getKey());
+                if (permissionIsAdmin(name, entry.getValue())) found.add(name);
+            }
+        } else if (raw instanceof Collection<?> collection) {
+            for (Object permObj : collection) {
+                String name = readName(permObj);
+                if (name != null && permissionIsAdmin(name, permObj)) found.add(name);
+            }
+        }
+        // Also scan the permission attached to this plugin's commands.
+        try {
+            org.bukkit.command.CommandMap commandMap = plugin.getServer().getCommandMap();
+            for (Command cmd : commandMap.getKnownCommands().values()) {
+                if (!belongsTo(cmd, plugin)) continue;
+                String perm = cmd.getPermission();
+                if (perm != null && !perm.isEmpty() && isAdminPermission(perm)) {
+                    found.add(perm);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return found;
+    }
+
+    private boolean belongsTo(Command cmd, Plugin plugin) {
+        if (cmd instanceof PluginCommand pc) {
+            return pc.getPlugin() == plugin;
+        }
+        // Some server commands (vanilla) have no owning plugin; attribute
+        // "minecraft.*" commands to the server itself.
+        return cmd.getName().equals("minecraft") && plugin.getName().equals("Paper");
+    }
+
+    private @Nullable String readName(Object permObj) {
+        if (permObj == null) return null;
+        try {
+            Object name = permObj.getClass().getMethod("getName").invoke(permObj);
+            return name != null ? name.toString() : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private boolean permissionIsAdmin(String name, Object permObj) {
+        String def = readDefault(permObj);
+        if (def != null) {
+            String d = def.toUpperCase(Locale.ROOT);
+            // TRUE / NOT_OP are available to ordinary players; OP / FALSE are not.
+            if (d.equals("TRUE") || d.equals("NOT_OP")) return false;
+            return true;
+        }
+        // No default information: fall back to the keyword heuristic.
+        return isAdminPermission(name);
+    }
+
+    private @Nullable String readDefault(Object permObj) {
+        if (permObj == null) return null;
+        try {
+            Object def = permObj.getClass().getMethod("getDefault").invoke(permObj);
+            return def != null ? def.toString() : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /* ----------------------------------------------------------------------
+     * LuckPerms (reflection, using the public API interfaces)
+     * ---------------------------------------------------------------------- */
+
+    private @Nullable Object luckPermsInstance() {
+        try {
+            Class<?> provider = Class.forName("net.luckperms.api.LuckPermsProvider");
+            return provider.getMethod("get").invoke(null);
+        } catch (Throwable t) {
+            plugin.getLogger().log(Level.FINE, "LuckPerms provider unavailable: " + t.getMessage());
+            return null;
+        }
+    }
+
+    private @Nullable Object groupManager(@Nullable Object luckPerms) throws Exception {
+        if (luckPerms == null) return null;
+        Class<?> api = Class.forName("net.luckperms.api.LuckPerms");
+        return api.getMethod("getGroupManager").invoke(luckPerms);
+    }
+
+    private @Nullable Object groupByName(@Nullable Object groupManager, @NotNull String name) throws Exception {
+        if (groupManager == null) return null;
+        Class<?> gm = Class.forName("net.luckperms.api.model.group.GroupManager");
+        return gm.getMethod("getGroup", String.class).invoke(groupManager, name);
+    }
+
+    private int groupWeight(@Nullable Object group) throws Exception {
+        if (group == null) return 0;
+        Class<?> groupIface = Class.forName("net.luckperms.api.model.group.Group");
+        Object weight = groupIface.getMethod("getWeight").invoke(group);
+        // LuckPerms returns OptionalInt (older builds returned int).
+        if (weight instanceof java.util.OptionalInt optional) {
+            return optional.orElse(0);
+        }
+        return weight instanceof Number n ? n.intValue() : 0;
+    }
+
+    @SuppressWarnings("unchecked")
+    private @Nullable Map<String, Boolean> groupNodes(@Nullable Object group) throws Exception {
+        if (group == null) return null;
+        Class<?> groupIface = Class.forName("net.luckperms.api.model.group.Group");
+        Object nodes;
+        try {
+            // Include permissions inherited from parent groups.
+            Class<?> holderIface = Class.forName("net.luckperms.api.model.PermissionHolder");
+            Object queryOptions = holderIface.getMethod("getQueryOptions").invoke(group);
+            Class<?> queryIface = Class.forName("net.luckperms.api.query.QueryOptions");
+            nodes = holderIface.getMethod("resolveInheritedNodes", queryIface).invoke(group, queryOptions);
+        } catch (Throwable ignored) {
+            nodes = groupIface.getMethod("getNodes").invoke(group);
+        }
+        if (nodes instanceof Map<?, ?> map) {
+            Map<String, Boolean> result = new java.util.HashMap<>();
+            for (Map.Entry<?, ?> e : map.entrySet()) {
+                result.put(String.valueOf(e.getKey()), Boolean.TRUE.equals(e.getValue()));
+            }
+            return result;
+        }
+        if (nodes instanceof Collection<?> collection) {
+            Map<String, Boolean> result = new java.util.HashMap<>();
+            Class<?> nodeIface = Class.forName("net.luckperms.api.node.Node");
+            for (Object node : collection) {
+                Object key = nodeIface.getMethod("getKey").invoke(node);
+                Object value = nodeIface.getMethod("getValue").invoke(node);
+                if (key != null) {
+                    result.put(key.toString(), value instanceof Boolean b ? b : Boolean.TRUE);
+                }
+            }
+            return result;
+        }
+        return null;
+    }
+
+    /**
+     * LuckPerms integration: determine groups above the default group by weight
+     * and return the permissions that only those groups hold directly.
+     */
+    public @NotNull Set<String> scanLuckPermsStaffPermissions(@NotNull String defaultGroup, int staffMinWeight) {
+        Set<String> staffPerms = new HashSet<>();
+        if (!luckpermsAvailable) return staffPerms;
+        try {
+            Object lp = luckPermsInstance();
+            if (lp == null) return staffPerms;
+            Object gm = groupManager(lp);
+            if (gm == null) return staffPerms;
+
+            Class<?> gmIface = Class.forName("net.luckperms.api.model.group.GroupManager");
+            Object defaultGroupObj = groupByName(gm, defaultGroup);
+            int defaultWeight = groupWeight(defaultGroupObj);
+
+            Object rawGroups = gmIface.getMethod("getLoadedGroups").invoke(gm);
+            if (!(rawGroups instanceof Collection<?> groups)) {
+                plugin.getLogger().warning("LuckPerms scan: getLoadedGroups() did not return a collection.");
+                return staffPerms;
+            }
+            Class<?> groupIface = Class.forName("net.luckperms.api.model.group.Group");
+            int groupsAbove = 0;
+            for (Object group : groups) {
+                Object nameObj = groupIface.getMethod("getName").invoke(group);
+                String name = nameObj != null ? nameObj.toString() : "";
+                if (name.equalsIgnoreCase(defaultGroup)) continue;
+                int weight = groupWeight(group);
+                boolean isStaff = weight > defaultWeight && weight >= staffMinWeight;
+                if (!isStaff) continue;
+                groupsAbove++;
+                Map<String, Boolean> nodes = groupNodes(group);
+                if (nodes == null) continue;
+                for (Map.Entry<String, Boolean> node : nodes.entrySet()) {
+                    if (Boolean.TRUE.equals(node.getValue())) {
+                        String perm = node.getKey();
+                        if (perm != null && !perm.isEmpty()) staffPerms.add(perm);
+                    }
+                }
+            }
+            plugin.getLogger().info("LuckPerms scan: " + groups.size() + " groups loaded, "
+                    + groupsAbove + " above '" + defaultGroup + "' (weight > " + defaultWeight
+                    + ", min " + staffMinWeight + "), " + staffPerms.size() + " staff permissions.");
+        } catch (Throwable t) {
+            plugin.getLogger().log(Level.WARNING, "LuckPerms reflection scan failed", t);
+        }
+        return staffPerms;
+    }
+
+    /**
+     * Whether the player is above the default (member) group in LuckPerms.
+     */
+    public boolean isPlayerAboveMember(@NotNull Player player, @NotNull String defaultGroup) {
+        if (!luckpermsAvailable) return player.isOp();
+        try {
+            Object lp = luckPermsInstance();
+            if (lp == null) return player.isOp();
+
+            Class<?> api = Class.forName("net.luckperms.api.LuckPerms");
+            Object userManager = api.getMethod("getUserManager").invoke(lp);
+            Class<?> umIface = Class.forName("net.luckperms.api.model.user.UserManager");
+            Object user = umIface.getMethod("getUser", java.util.UUID.class)
+                    .invoke(userManager, player.getUniqueId());
+            if (user == null) return player.isOp();
+
+            Object gm = groupManager(lp);
+            int defaultWeight = groupWeight(groupByName(gm, defaultGroup));
+
+            Class<?> userIface = Class.forName("net.luckperms.api.model.user.User");
+            Object primaryGroup = userIface.getMethod("getPrimaryGroup").invoke(user);
+            int weight = defaultWeight;
+            if (primaryGroup != null) {
+                weight = Math.max(weight, groupWeight(groupByName(gm, primaryGroup.toString())));
+            }
+
+            Object nodesObj = userIface.getMethod("getNodes").invoke(user);
+            if (nodesObj instanceof Map<?, ?> nodes) {
+                for (Map.Entry<?, ?> e : nodes.entrySet()) {
+                    if (Boolean.TRUE.equals(e.getValue()) && "*".equals(String.valueOf(e.getKey()))) {
+                        return true;
+                    }
+                }
+            }
+            return weight > defaultWeight || player.isOp();
+        } catch (Throwable t) {
+            plugin.getLogger().log(Level.FINE, "LuckPerms reflection check failed: " + t.getMessage());
+            return player.isOp();
+        }
+    }
+}

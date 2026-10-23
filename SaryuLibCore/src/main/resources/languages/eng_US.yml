@@ -1,0 +1,15 @@
+# English (default) language file for SaryuLibCore
+language:
+  name: English
+  code: eng_US
+
+messages:
+  prefix: "&7[&bSaryuLib&7] &r"
+  reloaded: "&aConfiguration reloaded."
+  noperm: "&cYou do not have permission to use this command."
+  playeronly: "&cThis command can only be used by a player."
+  unknown: "&cUnknown subcommand: &7{sub}"
+  db.unavailable: "&cDatabase unavailable; running in offline mode."
+
+errors:
+  internal: "&cAn internal error occurred. Check the console."

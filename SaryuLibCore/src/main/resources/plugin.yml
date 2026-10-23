@@ -1,0 +1,9 @@
+name: SaryuLibCore
+version: 3.0.1
+api-version: '1.21'
+main: id.saryu.libcore.SaryuLib
+description: Shared core library for Saryu plugins (config, language, database, packet, punishment, etc.)
+author: Saryu
+website: https://github.com/saryu
+softdepend: [LuckPerms, PlaceholderAPI, Floodgate, PacketEvents]
+load: POSTWORLD

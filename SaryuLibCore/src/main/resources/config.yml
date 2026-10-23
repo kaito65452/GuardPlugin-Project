@@ -1,0 +1,23 @@
+# SaryuLibCore configuration
+# Do not edit by hand unless you know what you are doing; use /saryulib reload.
+
+config:
+  version: 1
+
+database:
+  # MYSQL | H2 | SQLITE
+  type: SQLITE
+  host: 127.0.0.1
+  port: 3306
+  database: saryulibcore
+  user: root
+  password: ""
+  ssl: false
+  pool-size: 10
+
+language: eng_US
+language-per-player: false
+
+prefix: "&7[&bSaryuLib&7]"
+
+debug: false
