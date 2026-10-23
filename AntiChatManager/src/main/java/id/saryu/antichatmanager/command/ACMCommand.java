@@ -61,7 +61,111 @@ public class ACMCommand {
         root.register(new LanguageSub());
         root.register(new ExportSub());
         root.register(new ImportSub());
+        root.messages(new Messages());
         root.bind(plugin);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Framework messages                                                 */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Sends every framework-level message through AntiChatManager's language
+     * files and the shared MessageModule, so legacy codes, hex colours,
+     * MiniMessage tags and gradients are always parsed before output.
+     */
+    private final class Messages implements CommandFramework.MessageSink {
+        @Override
+        public void unknownSubcommand(CommandSender sender, String label, String input,
+                                      @Nullable String suggestion) {
+            send(sender, "command.unknown-subcommand", "&cUnknown subcommand: &7{sub}",
+                    "sub", input);
+            if (suggestion != null && !suggestion.isBlank()) {
+                send(sender, "command.did-you-mean", "&7Did you mean &f{suggestion}&7?",
+                        "suggestion", suggestion);
+            }
+        }
+
+        @Override
+        public void usage(CommandSender sender, String label, String usage) {
+            send(sender, "command.usage", "&7Usage: &f{usage}", "usage", usage);
+        }
+
+        @Override
+        public void subcommands(CommandSender sender, String label,
+                                java.util.Collection<String> subcommands) {
+            send(sender, "command.subcommands", "&7Subcommands: &f{subcommands}",
+                    "subcommands", String.join(", ", subcommands));
+        }
+
+        @Override
+        public void noPermission(CommandSender sender, boolean subcommand) {
+            send(sender, subcommand ? "command.no-sub-permission" : "command.no-permission",
+                    subcommand ? "&cYou do not have permission to use this subcommand."
+                            : "&cYou do not have permission to use this command.");
+        }
+
+        @Override
+        public void playerOnly(CommandSender sender) {
+            send(sender, "command.player-only",
+                    "&cThis command can only be used by a player.");
+        }
+
+        @Override
+        public void cooldown(CommandSender sender) {
+            send(sender, "command.cooldown",
+                    "&cPlease wait before using this command again.");
+        }
+
+        @Override
+        public void internalError(CommandSender sender, String label, String subcommand,
+                                  Throwable error) {
+            send(sender, "command.internal-error",
+                    "&cAn internal error occurred. Check the console.");
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Message pipeline                                                   */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Single rendering path for /acm output. Language text is expanded, values
+     * are escaped against MiniMessage injection, {@code %prefix%} is replaced by
+     * the configured prefix, and the result is parsed by MessageModule.
+     *
+     * @param addPrefix prepend the prefix when the template does not contain
+     *                  {@code %prefix%} itself
+     */
+    private Component render(String raw, boolean addPrefix, Object... vars) {
+        String text = fill(raw, vars);
+        String prefix = plugin.getConfigModule().getString("prefix", "");
+        if (prefix == null || prefix.isBlank()) {
+            prefix = plugin.getLang().get("prefix", "&7[&bACM&7]");
+        }
+        text = text.contains("%prefix%")
+                ? text.replace("%prefix%", prefix)
+                : (addPrefix ? prefix + " " + text : text);
+        return plugin.getMsg().parse(text);
+    }
+
+    /** Send a prefixed, language-aware message. */
+    private void send(CommandSender sender, String key, String def, Object... vars) {
+        sender.sendMessage(render(plugin.getLang().message(key, def), true, vars));
+    }
+
+    /** Send a continuation line (header/list row) without forcing the prefix. */
+    private void sendRaw(CommandSender sender, String key, String def, Object... vars) {
+        sender.sendMessage(render(plugin.getLang().message(key, def), false, vars));
+    }
+
+    private String fill(String text, Object... vars) {
+        if (text == null) return "";
+        String out = text;
+        for (int i = 0; i + 1 < vars.length; i += 2) {
+            out = out.replace("{" + vars[i] + "}", plugin.getMsg().escape(String.valueOf(vars[i + 1])));
+        }
+        return out;
     }
 
     /* ------------------------------------------------------------------ */
@@ -74,26 +178,6 @@ public class ACMCommand {
         @Override public int cooldownSeconds() { return 0; }
         @Override public @NotNull List<String> tabComplete(@NotNull CommandSender sender, String[] args) {
             return List.of();
-        }
-
-        /** Send a prefixed, language-aware message. */
-        protected void send(CommandSender sender, String key, String def, Object... vars) {
-            sender.sendMessage(plugin.getMsg().parse(
-                    plugin.getConfigModule().getString("prefix", "&7[&bACM&7]")
-                            + " " + fill(plugin.getLang().message(key, def), vars)));
-        }
-
-        protected void sendRaw(CommandSender sender, String key, String def, Object... vars) {
-            sender.sendMessage(plugin.getMsg().parse(fill(plugin.getLang().message(key, def), vars)));
-        }
-
-        protected String fill(String text, Object... vars) {
-            if (text == null) return "";
-            String out = text;
-            for (int i = 0; i + 1 < vars.length; i += 2) {
-                out = out.replace("{" + vars[i] + "}", String.valueOf(vars[i + 1]));
-            }
-            return out;
         }
 
         protected boolean isInt(String value) {
@@ -126,27 +210,15 @@ public class ACMCommand {
         @Override
         public void execute(CommandSender sender, Command cmd, String label, String[] args) {
             sendRaw(sender, "help.header", "&b=== AntiChatManager Commands ===");
-            String[][] rows = {
-                    {"reload", "Reload config and language files"},
-                    {"info", "Show plugin, database and blacklist status"},
-                    {"scan [report|sources]", "Run an auto-scan or show the last report"},
-                    {"blacklist list [page] [source]", "List blacklist entries"},
-                    {"blacklist check <command>", "Check whether a command is blacklisted"},
-                    {"blacklist add <command> [mode] [reason]", "Add a manual entry"},
-                    {"blacklist remove <id|command>", "Remove an entry"},
-                    {"blacklist whitelist <command>", "Remove auto-scan entries for a command"},
-                    {"blacklist purge", "Remove auto-scan entries for commands that no longer exist"},
-                    {"history <player> [page]", "Show a player's violation history"},
-                    {"violations <player>", "Show current violation count"},
-                    {"violations reset <player>", "Reset a player's violation count"},
-                    {"template [list|set|preview]", "Manage alert templates"},
-                    {"language [set <code>]", "Show or change the active language"},
-                    {"export", "Export the blacklist to YAML"},
-                    {"import <file>", "Import blacklist entries from YAML"}
-            };
-            for (String[] row : rows) {
+            for (String row : plugin.getLang().messageList("help.rows")) {
+                // Sub-command hints themselves contain '|' (e.g. <id|command>),
+                // so the description follows the last separator.
+                int split = row.lastIndexOf('|');
+                if (split < 0) continue;
                 sendRaw(sender, "help.line", "&7/{cmd} &f{sub} &8- &7{desc}",
-                        "cmd", label, "sub", row[0], "desc", row[1]);
+                        "cmd", label,
+                        "sub", row.substring(0, split),
+                        "desc", row.substring(split + 1));
             }
         }
     }
@@ -186,7 +258,9 @@ public class ACMCommand {
         public void execute(CommandSender sender, Command cmd, String label, String[] args) {
             Map<BlacklistManager.Source, Integer> counts = plugin.getBlacklist().countBySource();
             sendRaw(sender, "info.title", "&b=== AntiChatManager v{version} ===",
-                    "version", plugin.getDescription().getVersion());
+                    "version", plugin.getBuildInfo().getVersion());
+            sendRaw(sender, "info.build", "&7Build: &f{build}",
+                    "build", plugin.getBuildInfo().display());
             sendRaw(sender, "info.db", "&7Database: &f{type} &7(available={available}, schema=v{schema})",
                     "type", plugin.getLib().getDatabaseModule().getType(),
                     "available", plugin.getLib().getDatabaseModule().isAvailable(),
@@ -209,7 +283,8 @@ public class ACMCommand {
             sendRaw(sender, "info.scan", "&7Auto-scan: &f{enabled} &7(dry-run={dry}, last={last})",
                     "enabled", plugin.getAutoScanner().isEnabled(),
                     "dry", plugin.getAutoScanner().isDryRun(),
-                    "last", plugin.getAutoScanner().getLastScan() == 0 ? "never"
+                    "last", plugin.getAutoScanner().getLastScan() == 0
+                            ? plugin.getLang().message("info.never", "never")
                             : new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                             .format(new Date(plugin.getAutoScanner().getLastScan())));
             sendRaw(sender, "info.provider", "&7Ban provider: &f{provider}",
@@ -428,23 +503,24 @@ public class ACMCommand {
         }
 
         private void printEntry(CommandSender sender, BlacklistManager.Entry entry) {
+            line(sender, "blacklist.field.command", "command", entry.command);
+            line(sender, "blacklist.field.mode", "mode", entry.mode);
+            line(sender, "blacklist.field.source", "source", entry.source);
+            line(sender, "blacklist.field.plugin", "plugin",
+                    entry.pluginName == null ? "-" : entry.pluginName);
+            line(sender, "blacklist.field.permission", "permission",
+                    entry.permission == null ? "-" : entry.permission);
+            line(sender, "blacklist.field.reason", "reason",
+                    entry.reason == null ? "-" : entry.reason);
+            line(sender, "blacklist.field.added_by", "added_by",
+                    entry.addedBy == null ? "-" : entry.addedBy);
+            line(sender, "blacklist.field.added_at", "added_at", entry.addedAt == 0 ? "-"
+                    : new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(entry.addedAt)));
+        }
+
+        private void line(CommandSender sender, String labelKey, String fallback, Object value) {
             sendRaw(sender, "blacklist.info.line", "&7  {key}: &f{value}",
-                    "key", "command", "value", entry.command);
-            sendRaw(sender, "blacklist.info.line", "&7  {key}: &f{value}",
-                    "key", "mode", "value", entry.mode);
-            sendRaw(sender, "blacklist.info.line", "&7  {key}: &f{value}",
-                    "key", "source", "value", entry.source);
-            sendRaw(sender, "blacklist.info.line", "&7  {key}: &f{value}",
-                    "key", "plugin", "value", entry.pluginName == null ? "-" : entry.pluginName);
-            sendRaw(sender, "blacklist.info.line", "&7  {key}: &f{value}",
-                    "key", "permission", "value", entry.permission == null ? "-" : entry.permission);
-            sendRaw(sender, "blacklist.info.line", "&7  {key}: &f{value}",
-                    "key", "reason", "value", entry.reason == null ? "-" : entry.reason);
-            sendRaw(sender, "blacklist.info.line", "&7  {key}: &f{value}",
-                    "key", "added_by", "value", entry.addedBy == null ? "-" : entry.addedBy);
-            sendRaw(sender, "blacklist.info.line", "&7  {key}: &f{value}",
-                    "key", "added_at", "value", entry.addedAt == 0 ? "-"
-                            : new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(entry.addedAt)));
+                    "key", plugin.getLang().message(labelKey, fallback), "value", value);
         }
 
         private void add(CommandSender sender, String[] args) {
@@ -478,7 +554,10 @@ public class ACMCommand {
             entry.normalized = StringSanitizer.normalize(command);
             entry.mode = mode;
             entry.source = BlacklistManager.Source.MANUAL;
-            entry.reason = reason.length() == 0 ? "Added by " + sender.getName() : reason.toString();
+            entry.reason = reason.length() == 0
+                    ? fill(plugin.getLang().message("blacklist.add.default-reason",
+                            "Added by {player}"), "player", sender.getName())
+                    : reason.toString();
             entry.addedBy = sender.getName();
             entry.addedAt = System.currentTimeMillis();
             plugin.getBlacklist().addEntry(entry);
@@ -655,9 +734,11 @@ public class ACMCommand {
                         sendRaw(sender, "violations.header", "&b=== Violations: &f{player}",
                                 "player", name);
                         sendRaw(sender, "violations.line", "&7  {key}: &f{value}",
-                                "key", "in-memory", "value", memoryCount);
+                                "key", plugin.getLang().message("violations.key.memory", "in-memory"),
+                                "value", memoryCount);
                         sendRaw(sender, "violations.line", "&7  {key}: &f{value}",
-                                "key", "database", "value", dbCount);
+                                "key", plugin.getLang().message("violations.key.database", "database"),
+                                "value", dbCount);
                     })).exceptionally(ex -> {
                         plugin.getLogger().log(java.util.logging.Level.WARNING,
                                 "Failed to read violations for " + name, ex);
@@ -711,7 +792,7 @@ public class ACMCommand {
                     }
                     sendRaw(sender, "template.preview.header", "&b=== Preview: &f{name}", "name", name);
                     for (String line : preview.split("\n")) {
-                        sender.sendMessage(plugin.getMsg().parse(line));
+                        sender.sendMessage(render(line, false));
                     }
                 }
                 default -> send(sender, "template.usage",
@@ -738,45 +819,99 @@ public class ACMCommand {
     private final class LanguageSub extends Base {
         @Override public @NotNull String name() { return "language"; }
         @Override public String description() { return "Show or change the language"; }
-        @Override public String usage() { return "/acm language [set <code>]"; }
+        @Override public String usage() { return "/acm language [list|reload|set <code|number>]"; }
 
         @Override
         public void execute(CommandSender sender, Command cmd, String label, String[] args) {
             if (args.length == 0 || args[0].equalsIgnoreCase("list")) {
-                sendRaw(sender, "language.header", "&b=== Language &7(active: {active}&7)",
-                        "active", plugin.getLang().getActiveCode());
-                for (String code : plugin.getLang().getLoaded().keySet()) {
-                    sendRaw(sender, "language.line", "&7- &f{code}", "code", code);
-                }
+                showLanguages(sender, label);
                 return;
             }
             if (args[0].equalsIgnoreCase("reload")) {
                 plugin.getLang().reload();
+                plugin.getAlertManager().reloadConfig();
                 send(sender, "language.reload", "&aLanguage files reloaded.");
                 return;
             }
-            // Supports both /acm language set <code> and /acm language <code>.
+            // Supports /acm language set <code|number> and /acm language <code|number>.
             String requested = args[0].equalsIgnoreCase("set")
                     ? (args.length > 1 ? args[1] : null)
                     : args[0];
             if (requested == null) {
-                send(sender, "language.usage", "&7Usage: &f/acm language [list|reload|set <code>]");
+                send(sender, "language.usage",
+                        "&7Usage: &f/{label} language [list|reload|set <code|number>]",
+                        "label", label);
                 return;
+            }
+            String normalized = resolveLanguage(requested);
+            if (normalized == null) {
+                send(sender, "language.notfound", "&cUnknown language: &7{code}",
+                        "code", requested);
+                send(sender, "language.available", "&7Available languages: &f{codes}",
+                        "codes", availableLanguages());
+                return;
+            }
+            // Persist first, then reload the files and dependent caches. The
+            // confirmation below is looked up from the newly active language.
+            plugin.getLang().setActiveCode(normalized);
+            plugin.getLang().reload();
+            plugin.getAlertManager().reloadConfig();
+            send(sender, "language.set", "&aLanguage set to &f{code} &7({name})&a.",
+                    "code", normalized, "name", plugin.getLang().getDisplayName(normalized));
+        }
+
+        private void showLanguages(CommandSender sender, String label) {
+            List<String> codes = plugin.getLang().getCodes();
+            String active = plugin.getLang().getActiveCode();
+            sendRaw(sender, "language.header", "&b=== Language &7(active: {active}&7)",
+                    "active", active + " (" + plugin.getLang().getDisplayName(active) + ")");
+            for (int i = 0; i < codes.size(); i++) {
+                String code = codes.get(i);
+                String key = code.equals(active) ? "language.line-active" : "language.line";
+                String def = code.equals(active)
+                        ? "&7{index}. &f{code} &7({name}) &a<- active"
+                        : "&7{index}. &f{code} &7({name})";
+                sendRaw(sender, key, def,
+                        "index", i + 1,
+                        "code", code,
+                        "name", plugin.getLang().getDisplayName(code));
+            }
+            send(sender, "language.hint",
+                    "&7Use &f/{label} language set <code|number>&7 to change the active language.",
+                    "label", label);
+        }
+
+        /** Resolve a 1-based list number or a case-insensitive language code. */
+        private @Nullable String resolveLanguage(String requested) {
+            if (isInt(requested)) {
+                int index = Integer.parseInt(requested);
+                List<String> codes = plugin.getLang().getCodes();
+                if (index >= 1 && index <= codes.size()) return codes.get(index - 1);
+                return null;
             }
             String normalized = plugin.getLang().normalizeCode(requested);
-            if (!plugin.getLang().hasCode(normalized)) {
-                send(sender, "language.notfound", "&cUnknown language: &7{code}", "code", requested);
-                return;
+            return plugin.getLang().hasCode(normalized) ? normalized : null;
+        }
+
+        private String availableLanguages() {
+            List<String> codes = plugin.getLang().getCodes();
+            StringBuilder out = new StringBuilder();
+            for (int i = 0; i < codes.size(); i++) {
+                if (i > 0) out.append(", ");
+                out.append(i + 1).append(". ").append(codes.get(i));
             }
-            plugin.getLang().setActiveCode(normalized);
-            send(sender, "language.set", "&aLanguage set to &f{code}&a.", "code", normalized);
+            return out.toString();
         }
 
         @Override
         public @NotNull List<String> tabComplete(CommandSender sender, String[] args) {
-            if (args.length == 1) return filter(List.of("list", "set"), args[0]);
-            if (args.length == 2) {
-                return filter(new ArrayList<>(plugin.getLang().getLoaded().keySet()), args[1]);
+            if (args.length == 1) {
+                List<String> options = new ArrayList<>(List.of("list", "reload", "set"));
+                options.addAll(plugin.getLang().getCodes());
+                return filter(options, args[0]);
+            }
+            if (args.length == 2 && args[0].equalsIgnoreCase("set")) {
+                return filter(new ArrayList<>(plugin.getLang().getCodes()), args[1]);
             }
             return List.of();
         }
@@ -872,7 +1007,8 @@ public class ACMCommand {
                     e.source = BlacklistManager.Source.IMPORT;
                     e.pluginName = map.get("plugin") != null ? String.valueOf(map.get("plugin")) : null;
                     e.permission = map.get("permission") != null ? String.valueOf(map.get("permission")) : null;
-                    e.reason = map.get("reason") != null ? String.valueOf(map.get("reason")) : "Imported";
+                    e.reason = map.get("reason") != null ? String.valueOf(map.get("reason"))
+                            : plugin.getLang().message("import.default-reason", "Imported");
                     e.addedBy = sender.getName();
                     e.addedAt = System.currentTimeMillis();
                     plugin.getBlacklist().addEntry(e);
@@ -897,7 +1033,7 @@ public class ACMCommand {
     }
 
     private String displayId(int id) {
-        return id < 0 ? "pending" : String.valueOf(id);
+        return id < 0 ? plugin.getLang().message("blacklist.pending", "pending") : String.valueOf(id);
     }
 
     private String resolvePlayerKey(String name) {

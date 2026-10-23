@@ -12,6 +12,15 @@ messages:
   playeronly: "&cPerintah ini hanya dapat digunakan oleh pemain."
   unknown: "&cSubperintah tidak diketahui: &7{sub}"
   usage: "&7Penggunaan: &f{usage}"
+  command.unknown-subcommand: "%prefix%&cSubperintah tidak diketahui: &7{sub}"
+  command.usage: "%prefix%&7Penggunaan: &f{usage}"
+  command.subcommands: "%prefix%&7Subperintah: &f{subcommands}"
+  command.did-you-mean: "%prefix%&7Maksud kamu &f{suggestion}&7?"
+  command.no-permission: "%prefix%&cKamu tidak memiliki izin untuk menggunakan perintah ini."
+  command.no-sub-permission: "%prefix%&cKamu tidak memiliki izin untuk menggunakan subperintah ini."
+  command.player-only: "%prefix%&cPerintah ini hanya dapat digunakan oleh pemain."
+  command.cooldown: "%prefix%&cTunggu sebentar sebelum menggunakan perintah ini lagi."
+  command.internal-error: "%prefix%&cTerjadi kesalahan internal. Periksa konsol."
 
   # --- Keamanan ---
   security.rate-limit.kick: "&cTerlalu banyak permintaan. Mohon perlambat."
@@ -19,9 +28,28 @@ messages:
   # --- Bantuan ---
   help.header: "&b=== Daftar Perintah AntiChatManager ==="
   help.line: "&7/{cmd} &f{sub} &8- &7{desc}"
+  help.rows:
+    - "reload|Muat ulang konfigurasi dan file bahasa"
+    - "info|Tampilkan status plugin, database, dan blacklist"
+    - "scan [report|sources]|Jalankan pemindaian atau tampilkan laporan terakhir"
+    - "blacklist list [halaman] [sumber]|Tampilkan entri blacklist"
+    - "blacklist check <perintah>|Periksa apakah perintah masuk blacklist"
+    - "blacklist add <perintah> [mode] [alasan]|Tambahkan entri manual"
+    - "blacklist remove <id|perintah>|Hapus entri"
+    - "blacklist whitelist <perintah>|Hapus entri hasil pemindaian untuk perintah"
+    - "blacklist purge|Hapus entri pemindaian yang perintahnya sudah tidak ada"
+    - "history <pemain> [halaman]|Tampilkan riwayat pelanggaran pemain"
+    - "violations <pemain>|Tampilkan jumlah pelanggaran saat ini"
+    - "violations reset <pemain>|Reset jumlah pelanggaran pemain"
+    - "template [list|set|preview]|Kelola template alert"
+    - "language [list|reload|set <kode|nomor>]|Tampilkan atau ganti bahasa aktif"
+    - "export|Ekspor blacklist ke YAML"
+    - "import <file>|Impor entri blacklist dari YAML"
 
   # --- Info ---
   info.title: "&b=== AntiChatManager v{version} ==="
+  info.build: "&7Build: &f{build}"
+  info.never: "belum pernah"
   info.db: "&7Database: &f{type} &7(tersedia={available}, skema=v{schema})"
   info.entries: "&7Entri blacklist: &f{count} &7(manual={manual}, plugin={plugin}, luckperms={lp}, impor={imp})"
   info.packet: "&7Lapisan paket: &f{backend} &7(aktif={active})"
@@ -56,6 +84,16 @@ messages:
   blacklist.notfound: "&cTidak ada entri daftar hitam untuk &7{command}."
   blacklist.info.title: "&b=== Entri Blacklist #{id} ==="
   blacklist.info.line: "&7  {key}: &f{value}"
+  blacklist.field.command: "perintah"
+  blacklist.field.mode: "mode"
+  blacklist.field.source: "sumber"
+  blacklist.field.plugin: "plugin"
+  blacklist.field.permission: "izin"
+  blacklist.field.reason: "alasan"
+  blacklist.field.added_by: "ditambahkan oleh"
+  blacklist.field.added_at: "ditambahkan pada"
+  blacklist.pending: "tertunda"
+  blacklist.add.default-reason: "Ditambahkan oleh {player}"
   blacklist.add.usage: "&7Penggunaan: &f/acm blacklist add <perintah> [mode] [alasan...]"
   blacklist.add.exists: "&c&f{command} &csudah ada dalam daftar hitam."
   blacklist.added: "&aMenambahkan &7{command} &ake daftar hitam (sumber: {source}, mode: {mode})."
@@ -77,6 +115,8 @@ messages:
   violations.reset: "&aJumlah pelanggaran untuk &f{player} &atelah direset."
   violations.header: "&b=== Pelanggaran: &f{player}"
   violations.line: "&7  {key}: &f{value}"
+  violations.key.memory: "di memori"
+  violations.key.database: "database"
 
   # --- Template ---
   template.usage: "&7Penggunaan: &f/acm template <list|set|preview> <nama>"
@@ -87,17 +127,22 @@ messages:
   template.preview.header: "&b=== Pratinjau: &f{name}"
 
   # --- Bahasa ---
-  language.usage: "&7Penggunaan: &f/acm language [list|set <kode>]"
-  language.header: "&b=== Bahasa &7(aktif: {active}&7)"
-  language.line: "&7- &f{code}"
-  language.notfound: "&cBahasa tidak ditemukan: &7{code}"
-  language.set: "&aBahasa diatur ke &f{code}&a."
+  language.usage: "%prefix%&7Penggunaan: &f/{label} language [list|reload|set <kode|nomor>]"
+  language.header: "%prefix%&b=== Bahasa &7(aktif: &f{active}&7)"
+  language.line: "&7{index}. &f{code} &7({name})"
+  language.line-active: "&7{index}. &f{code} &7({name}) &a<- aktif"
+  language.hint: "%prefix%&7Gunakan &f/{label} language set <kode|nomor>&7 untuk mengganti bahasa aktif."
+  language.notfound: "%prefix%&cBahasa tidak ditemukan: &7{code}"
+  language.available: "%prefix%&7Bahasa tersedia: &f{codes}"
+  language.set: "%prefix%&aBahasa diatur ke &f{code} &7({name})&a."
+  language.reload: "%prefix%&aFile bahasa berhasil dimuat ulang."
 
   # --- Ekspor / impor ---
   export.done: "&aBerhasil mengekspor &f{count} &aentri ke &f{file}&a."
   export.failed: "&cEkspor gagal: {error}"
   import.usage: "&7Penggunaan: &f/acm import <file>"
   import.notfound: "&cFile tidak ditemukan: &f{file}"
+  import.default-reason: "Diimpor"
   import.done: "&aBerhasil mengimpor &f{added} &aentri (&f{skipped} &adilewati karena duplikat)."
 
   # --- Alert / hukuman (teks dari config juga tersedia) ---

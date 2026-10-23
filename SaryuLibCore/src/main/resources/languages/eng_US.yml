@@ -9,6 +9,15 @@ messages:
   noperm: "&cYou do not have permission to use this command."
   playeronly: "&cThis command can only be used by a player."
   unknown: "&cUnknown subcommand: &7{sub}"
+  command.unknown-subcommand: "%prefix%&cUnknown subcommand: &7{sub}"
+  command.usage: "%prefix%&7Usage: &f{usage}"
+  command.subcommands: "%prefix%&7Subcommands: &f{subcommands}"
+  command.did-you-mean: "%prefix%&7Did you mean &f{suggestion}&7?"
+  command.no-permission: "%prefix%&cYou do not have permission to use this command."
+  command.no-sub-permission: "%prefix%&cYou do not have permission to use this subcommand."
+  command.player-only: "%prefix%&cThis command can only be used by a player."
+  command.cooldown: "%prefix%&cPlease wait before using this command again."
+  command.internal-error: "%prefix%&cAn internal error occurred. Check the console."
   db.unavailable: "&cDatabase unavailable; running in offline mode."
 
 errors:

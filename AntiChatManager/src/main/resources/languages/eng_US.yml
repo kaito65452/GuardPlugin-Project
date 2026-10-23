@@ -12,6 +12,15 @@ messages:
   playeronly: "&cThis command can only be used by a player."
   unknown: "&cUnknown subcommand: &7{sub}"
   usage: "&7Usage: &f{usage}"
+  command.unknown-subcommand: "%prefix%&cUnknown subcommand: &7{sub}"
+  command.usage: "%prefix%&7Usage: &f{usage}"
+  command.subcommands: "%prefix%&7Subcommands: &f{subcommands}"
+  command.did-you-mean: "%prefix%&7Did you mean &f{suggestion}&7?"
+  command.no-permission: "%prefix%&cYou do not have permission to use this command."
+  command.no-sub-permission: "%prefix%&cYou do not have permission to use this subcommand."
+  command.player-only: "%prefix%&cThis command can only be used by a player."
+  command.cooldown: "%prefix%&cPlease wait before using this command again."
+  command.internal-error: "%prefix%&cAn internal error occurred. Check the console."
 
   # --- Security ---
   security.rate-limit.kick: "&cToo many requests. Please slow down."
@@ -19,9 +28,28 @@ messages:
   # --- Help ---
   help.header: "&b=== AntiChatManager Commands ==="
   help.line: "&7/{cmd} &f{sub} &8- &7{desc}"
+  help.rows:
+    - "reload|Reload config and language files"
+    - "info|Show plugin, database and blacklist status"
+    - "scan [report|sources]|Run an auto-scan or show the last report"
+    - "blacklist list [page] [source]|List blacklist entries"
+    - "blacklist check <command>|Check whether a command is blacklisted"
+    - "blacklist add <command> [mode] [reason]|Add a manual entry"
+    - "blacklist remove <id|command>|Remove an entry"
+    - "blacklist whitelist <command>|Remove auto-scan entries for a command"
+    - "blacklist purge|Remove auto-scan entries for commands that no longer exist"
+    - "history <player> [page]|Show a player's violation history"
+    - "violations <player>|Show current violation count"
+    - "violations reset <player>|Reset a player's violation count"
+    - "template [list|set|preview]|Manage alert templates"
+    - "language [list|reload|set <code|number>]|Show or change the active language"
+    - "export|Export the blacklist to YAML"
+    - "import <file>|Import blacklist entries from YAML"
 
   # --- Info ---
   info.title: "&b=== AntiChatManager v{version} ==="
+  info.build: "&7Build: &f{build}"
+  info.never: "never"
   info.db: "&7Database: &f{type} &7(available={available}, schema=v{schema})"
   info.entries: "&7Blacklist entries: &f{count} &7(manual={manual}, plugin={plugin}, luckperms={lp}, import={imp})"
   info.packet: "&7Packet layer: &f{backend} &7(active={active})"
@@ -56,6 +84,16 @@ messages:
   blacklist.notfound: "&cNo blacklist entry found for &7{command}."
   blacklist.info.title: "&b=== Blacklist Entry #{id} ==="
   blacklist.info.line: "&7  {key}: &f{value}"
+  blacklist.field.command: "command"
+  blacklist.field.mode: "mode"
+  blacklist.field.source: "source"
+  blacklist.field.plugin: "plugin"
+  blacklist.field.permission: "permission"
+  blacklist.field.reason: "reason"
+  blacklist.field.added_by: "added by"
+  blacklist.field.added_at: "added at"
+  blacklist.pending: "pending"
+  blacklist.add.default-reason: "Added by {player}"
   blacklist.add.usage: "&7Usage: &f/acm blacklist add <command> [mode] [reason...]"
   blacklist.add.exists: "&c&f{command} &cis already blacklisted."
   blacklist.added: "&aAdded &7{command} &ato the blacklist (source: {source}, mode: {mode})."
@@ -77,6 +115,8 @@ messages:
   violations.reset: "&aViolation count reset for &f{player}&a."
   violations.header: "&b=== Violations: &f{player}"
   violations.line: "&7  {key}: &f{value}"
+  violations.key.memory: "in-memory"
+  violations.key.database: "database"
 
   # --- Templates ---
   template.usage: "&7Usage: &f/acm template <list|set|preview> <name>"
@@ -87,17 +127,22 @@ messages:
   template.preview.header: "&b=== Preview: &f{name}"
 
   # --- Language ---
-  language.usage: "&7Usage: &f/acm language [list|set <code>]"
-  language.header: "&b=== Language &7(active: {active}&7)"
-  language.line: "&7- &f{code}"
-  language.notfound: "&cUnknown language: &7{code}"
-  language.set: "&aLanguage set to &f{code}&a."
+  language.usage: "%prefix%&7Usage: &f/{label} language [list|reload|set <code|number>]"
+  language.header: "%prefix%&b=== Language &7(active: &f{active}&7)"
+  language.line: "&7{index}. &f{code} &7({name})"
+  language.line-active: "&7{index}. &f{code} &7({name}) &a<- active"
+  language.hint: "%prefix%&7Use &f/{label} language set <code|number>&7 to change the active language."
+  language.notfound: "%prefix%&cUnknown language: &7{code}"
+  language.available: "%prefix%&7Available languages: &f{codes}"
+  language.set: "%prefix%&aLanguage set to &f{code} &7({name})&a."
+  language.reload: "%prefix%&aLanguage files reloaded."
 
   # --- Export / import ---
   export.done: "&aExported &f{count} &aentries to &f{file}&a."
   export.failed: "&cExport failed: {error}"
   import.usage: "&7Usage: &f/acm import <file>"
   import.notfound: "&cFile not found: &f{file}"
+  import.default-reason: "Imported"
   import.done: "&aImported &f{added} &aentries (&f{skipped} &askipped as duplicates)."
 
   # --- Alerts / punishment (config-driven strings also exist) ---
