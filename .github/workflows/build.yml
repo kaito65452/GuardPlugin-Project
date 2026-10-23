@@ -1,82 +1,65 @@
-name: Build
+name: build
 
 on:
   push:
-    branches: ["dev"]
-    tags: ["v*"]
-  workflow_dispatch:
+    branches: [dev, main]
+  pull_request:
 
+# Least privilege by default; jobs that need more declare it explicitly.
 permissions:
   contents: read
-
-concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # TODO: pin every action below to a full commit SHA (use `pinact run` or
+      # Dependabot) before relying on this workflow for releases.
+      - uses: actions/checkout@v4
+      - uses: gradle/actions/wrapper-validation@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build, test and forbidden-API scan
+        run: ./gradlew build --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jars
+          path: |
+            AntiChatManager/build/libs/*.jar
+            SaryuLibCore/build/libs/*.jar
+
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: java-kotlin
+          build-mode: manual
+      - run: ./gradlew compileJava --no-daemon
+      - uses: github/codeql-action/analyze@v3
+
+  secrets-and-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: google/osv-scanner-action/osv-scanner-action@v2
         with:
-          distribution: "temurin"
-          java-version: "21"
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
-
-      - name: Make gradlew executable
-        run: chmod +x gradlew
-
-      - name: Build (dev)
-        if: github.ref == 'refs/heads/dev'
-        run: ./gradlew clean build --no-daemon
-
-      - name: Build (release)
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: ./gradlew clean build -Prelease --no-daemon
-
-      - name: Upload dev artifacts
-        if: github.ref == 'refs/heads/dev'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: dev-jars
-          path: |
-            SaryuLibCore/build/libs/*.jar
-            AntiChatManager/build/libs/*.jar
-            !**/*-sources.jar
-          if-no-files-found: error
-
-      - name: Create/update dev-latest pre-release
-        if: github.ref == 'refs/heads/dev'
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
-        with:
-          tag_name: dev-latest
-          name: AntiChatManager dev-latest
-          prerelease: true
-          generate_release_notes: true
-          files: |
-            SaryuLibCore/build/libs/SaryuLibCore-*.jar
-            AntiChatManager/build/libs/AntiChatManager-*.jar
-
-      - name: Create GitHub release from tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
-        with:
-          generate_release_notes: true
-          files: |
-            SaryuLibCore/build/libs/SaryuLibCore-*.jar
-            AntiChatManager/build/libs/AntiChatManager-*.jar
+          scan-args: |-
+            --recursive
+            ./
