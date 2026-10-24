@@ -52,6 +52,8 @@ dependencies {
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
+    testImplementation(libs.paper.api)
+    testImplementation(libs.adventure.minimessage)
 
     // Bundled into the SaryuLibCore jar (fat jar) so consumers get a
     // self-contained shared library for all Saryu plugins.

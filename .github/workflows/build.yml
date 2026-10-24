@@ -13,22 +13,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # TODO: pin every action below to a full commit SHA (use `pinact run` or
-      # Dependabot) before relying on this workflow for releases.
-      - uses: actions/checkout@v4
-      - uses: gradle/actions/wrapper-validation@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: gradle/actions/wrapper-validation@cc420b9916327311543b591b6e4e0bcf00c92019 # v4.2.0
+      - uses: actions/setup-java@8df1039f92634f4ed5b7c63d259469619363b9e0 # v4.6.1
         with:
           distribution: temurin
           java-version: "21"
-      - uses: gradle/actions/setup-gradle@v4
-      - name: Build, test and forbidden-API scan
+      - uses: gradle/actions/setup-gradle@cc420b9916327311543b591b6e4e0bcf00c92019 # v4.2.0
+      - name: Build, test and assemble reproducible jars
         run: ./gradlew build --no-daemon
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
           name: jars
           path: |
             AntiChatManager/build/libs/*.jar
+            SaryuGuard/build/libs/*.jar
             SaryuLibCore/build/libs/*.jar
 
   codeql:
@@ -37,28 +36,28 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-java@8df1039f92634f4ed5b7c63d259469619363b9e0 # v4.6.1
         with:
           distribution: temurin
           java-version: "21"
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@48ab28a6f5dab2a725c10019129c7b6015f70572 # v3.28.10
         with:
           languages: java-kotlin
           build-mode: manual
       - run: ./gradlew compileJava --no-daemon
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@48ab28a6f5dab2a725c10019129c7b6015f70572 # v3.28.10
 
   secrets-and-deps:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@82f42a15555cfa8ff7b72db55b71c26027a4a9c6 # v2.3.8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
+      - uses: google/osv-scanner-action/osv-scanner-action@555fe237cb4f3e64178704a7967009d8083b403f # v2.3.8
         with:
           scan-args: |-
             --recursive

@@ -47,4 +47,20 @@ dependencies {
     compileOnly(libs.paper.api)
     compileOnly(libs.adventure.minimessage)
     compileOnly(libs.placeholderapi)
+
+    // Tests
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
+    testImplementation(libs.sqlite.jdbc)
+    testImplementation(libs.paper.api)
+    testImplementation(libs.adventure.minimessage)
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(21)
+    options.encoding = "UTF-8"
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
