@@ -126,6 +126,53 @@ class MigrationManagerTest {
         }
     }
 
+    @Test
+    @DisplayName("Test migration against real server database file from testing-server")
+    void testMigrationWithRealServerDb(@TempDir Path tempDir) throws Exception {
+        File realDb = new File("../testing-server/plugins/AntiChatManager/data.db");
+        if (!realDb.exists()) {
+            realDb = new File("testing-server/plugins/AntiChatManager/data.db");
+        }
+        if (!realDb.exists()) {
+            return; // Skip if run in environment without testing-server dir
+        }
+
+        File dataDir = tempDir.resolve("AntiChatManager").toFile();
+        assertTrue(dataDir.mkdirs());
+        File copiedDb = new File(dataDir, "data.db");
+        java.nio.file.Files.copy(realDb.toPath(), copiedDb.toPath());
+
+        // Create a dummy config.yml and language dir to test backup
+        File cfgFile = new File(dataDir, "config.yml");
+        java.nio.file.Files.writeString(cfgFile.toPath(), "test: true");
+        File langDir = new File(dataDir, "languages");
+        langDir.mkdirs();
+        java.nio.file.Files.writeString(new File(langDir, "messages.yml").toPath(), "test-msg: ok");
+
+        String jdbcUrl = "jdbc:sqlite:" + copiedDb.getAbsolutePath();
+        Logger logger = Logger.getLogger("RealDbTest");
+        TestDbModule testDb = new TestDbModule(jdbcUrl);
+        LiteStorage storage = new LiteStorage(testDb, logger);
+        storage.init();
+
+        MigrationManager migrator = new MigrationManager(dataDir, logger, storage, testDb);
+        MigrationManager.MigrationReport report = migrator.runMigration();
+
+        assertTrue(report.success, "Migration on real server database should succeed: " + report.errorMessage);
+
+        // Verify backup-3.x directory was created and contains backup files
+        File backupDir = new File(dataDir, "backup-3.x");
+        assertTrue(backupDir.exists() && backupDir.isDirectory(), "backup-3.x should exist");
+        File[] backups = backupDir.listFiles();
+        assertNotNull(backups);
+        assertTrue(backups.length >= 1, "There should be at least one backup folder");
+
+        // Verify idempotency on second run
+        MigrationManager.MigrationReport report2 = migrator.runMigration();
+        assertTrue(report2.success, "Second migration run should succeed");
+        assertTrue(report2.skipped, "Second migration run should be skipped via idempotency");
+    }
+
     private static class TestDbModule extends DatabaseModule {
         private final String jdbcUrl;
 

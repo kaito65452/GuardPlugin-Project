@@ -38,12 +38,20 @@ Modular security engine with real-time operational status reporting (`ACTIVE`, `
 
 | Component | Tested Versions | Notes |
 |---|---|---|
-| **PaperMC** | `1.21.x` up to `26.2` | Bytecode compiled with `--release 21`. |
-| **Java Runtime** | Java 21, Java 25 | Paper 1.21 requires Java 21+; Paper 26.1+ requires Java 25. |
-| **Databases** | SQLite (bundled), H2 (bundled), MySQL | HikariCP connection pooling. |
-| **Permissions** | LuckPerms 5.4+ | Context-aware 2FA gating. |
+| **PaperMC** | `1.21.4`, `26.2` (build 134) | Bytecode compiled with Java 21 target (`--release 21`). |
+| **Java Runtime** | Java 21 LTS, Java 25 | Paper 1.21.x requires Java 21+; Paper 26.x requires Java 25. |
+| **Databases** | SQLite 3 (bundled), H2 (bundled), MySQL | HikariCP connection pooling. |
+| **Permissions** | LuckPerms 5.4+ | Context-aware 2FA gating (`saryuguard:2fa=true`). |
 | **Auth** | AuthMe Reloaded | Auth commands/arguments never logged; 2FA activates after login. |
 | **Anti-Cheats** | Sonar, GrimAC, Vulcan, Themis, NovaAC | Dynamic delegation for connection and ping throttles. |
+
+### JVM Flags & Java 25 SQLite Notice
+
+When running on Java 25 (mandatory for Paper 26.x), the SQLite JDBC driver invokes native JNI loading (`System.load`) which triggers a restricted method access warning in unnamed modules. To silence this warning and enable high-performance native SQLite access on Java 25, add `--enable-native-access=ALL-UNNAMED` to your server startup command:
+
+```bash
+java --enable-native-access=ALL-UNNAMED -Xms2G -Xmx4G -jar paper-26.2-134.jar --nogui
+```
 
 ---
 
