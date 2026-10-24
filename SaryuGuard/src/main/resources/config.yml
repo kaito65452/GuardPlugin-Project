@@ -1,0 +1,137 @@
+# ==============================================================================
+# SARYUGUARD CONFIGURATION
+# ==============================================================================
+# Paper 1.21.x - 26.x
+# Semua permission admin secara default adalah 'op'.
+# ==============================================================================
+
+# Bahasa default: id (Bahasa Indonesia) atau en (English)
+locale: "id"
+
+# Pengaturan Keamanan Umum
+security:
+  # Batas ukuran maksimum file konfigurasi yang diizinkan untuk dimuat (dalam byte)
+  max-config-bytes: 1048576 # 1 MB
+  # Status pelaporan ketat
+  strict-status-reporting: true
+
+# ------------------------------------------------------------------------------
+# 3.1 & 3.2 DETECT & PLUGIN VERIFY
+# ------------------------------------------------------------------------------
+plugin-verify:
+  enabled: true
+  # Opt-in pengiriman hash jar ke layanan publik (Modrinth)
+  network-lookup: false
+  # User-Agent untuk request Modrinth
+  user-agent: "SaryuGuard/{VERSION} (admin-contact)"
+  # Waktu simpan cache hasil lookup
+  cache-ttl: "7d"
+  # Polling cadangan (dalam detik) di samping WatchService
+  fallback-poll-interval: 300
+  # Rate limit lookup network (request per menit)
+  rate-limit-per-minute: 30
+
+# ------------------------------------------------------------------------------
+# 3.3 MALWARE SCANNER (MCAntiMalware Wrapper)
+# ------------------------------------------------------------------------------
+malware-scanner:
+  enabled: false
+  # Lokasi JAR MCAntiMalware yang dipasang oleh admin server
+  jar-path: "scanner/MCAntiMalware.jar"
+  # SHA-256 JAR scanner yang dipin oleh admin (kosongkan jika belum dipin)
+  pinned-sha256: ""
+  # Batas memori JVM untuk scanner (-Xmx)
+  max-heap: "512M"
+  # Batas waktu proses scan (dalam detik)
+  timeout-seconds: 120
+  # Batas ukuran log output scanner (dalam byte)
+  max-output-bytes: 524288 # 512 KB
+
+# ------------------------------------------------------------------------------
+# 3.4 OPGUARD & STAFF 2FA
+# ------------------------------------------------------------------------------
+opguard:
+  enabled: true
+  # Mode: enforce (langsung deop pemain tidak sah) atau warn (hanya broadcast alert)
+  mode: "enforce"
+  # Interval pemeriksaan berkala (dalam detik)
+  check-interval-seconds: 60
+  # Daftar UUID pemain yang sah menjadi OP
+  allowed-ops: []
+
+staff-2fa:
+  enabled: true
+  # Permission yang mewajibkan 2FA (misal staf atau admin)
+  required-permission: "saryuguard.2fa.required"
+  # Waktu tunggu input kode OTP sebelum di-kick (dalam detik, default 300 = 5 menit)
+  session-timeout-seconds: 300
+  # Batas percobaan salah sebelum akun di-LOCK
+  max-attempts: 5
+  # Aktifkan PIN statis tambahan (opsional)
+  static-pin-enabled: false
+
+# ------------------------------------------------------------------------------
+# 3.5 CHAT FILTER
+# ------------------------------------------------------------------------------
+chat-filter:
+  enabled: true
+  # Tindakan jika terjadi error pada engine filter: allow atau block
+  on-error: "allow"
+  # Kolaps karakter berulang berturut-turut (mis. heeeelllooo -> hello)
+  collapse-repeats: true
+  # Deteksi karakter sensor seperti 'b*ngo', 'an**ng'
+  censor-char-trie: true
+  # Maksimal karakter sensor per kata
+  max-censor-chars: 2
+  # Panjang minimal kata bertanda sensor untuk dianalisis
+  min-censor-word-length: 4
+  # Batas regex admin
+  max-regex-count: 50
+  max-regex-length: 128
+
+# ------------------------------------------------------------------------------
+# 3.6 CONNECTION GUARD
+# ------------------------------------------------------------------------------
+connection-guard:
+  enabled: true
+  # Bagian proxy hanya aktif jika proxy.enabled: true
+  proxy:
+    enabled: false
+    trusted-proxies:
+      - "127.0.0.1"
+      - "::1"
+  # Batas sambungan per IP (dalam milidetik)
+  ip-throttle-ms: 3000
+  # Batas ping server list per IP per detik
+  max-pings-per-second: 5
+  # Mode mitigasi serangan otomatis
+  attack-mode:
+    enabled: true
+    slowdown-new-players-ms: 5000
+  # Batas akun terdaftar per IP (toleransi CGNAT)
+  max-accounts-per-ip: 5
+  # Rejoin check
+  rejoin-check: false
+  rejoin-delay-seconds: 3
+  # Kompatibilitas otomatis dengan Sonar & AuthMe (auto|on|off)
+  compat:
+    sonar: "auto"
+    authme: "auto"
+    # Tindakan jika plugin integrasi hilang/dimatikan di tengah jalan: full | keep
+    on-missing: "full"
+
+# ------------------------------------------------------------------------------
+# 3.7 & 3.8 AUDIT & KRIPTOGRAFI DATABASE
+# ------------------------------------------------------------------------------
+database:
+  # Jenis database: SQLITE atau H2
+  type: "SQLITE"
+  # Retensi data audit (hari)
+  retention-days: 30
+  # Tindakan bila antrean tulis audit gagal: alert atau ignore
+  on-write-failure: "alert"
+  # Mode enkripsi: default menggunakan secret.key
+  encryption:
+    enabled: true
+    # Masking IP pada audit (mis. 192.168.1.xxx)
+    mask-ip: true

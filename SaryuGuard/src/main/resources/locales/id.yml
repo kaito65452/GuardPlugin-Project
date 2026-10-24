@@ -1,0 +1,47 @@
+# SaryuGuard Indonesian Localization (id)
+prefix: "<dark_gray>[<gold>Saryu<red>Guard<dark_gray>]<reset> "
+
+core:
+  no-permission: "<red>Anda tidak memiliki izin untuk menjalankan perintah ini."
+  player-only: "<red>Perintah ini hanya dapat dijalankan oleh pemain dalam game."
+  reload-success: "<green>Konfigurasi dan modul SaryuGuard berhasil dimuat ulang."
+  reload-failed: "<red>Gagal memuat ulang konfigurasi: <gray>{error}"
+  unknown-subcommand: "<red>Subcommand tidak dikenal. Ketik <yellow>/sg help<red> untuk bantuan."
+
+status:
+  header: "<gold>=== Status Sistem SaryuGuard ===<reset>"
+  line: "<gray>- <white>{module}: {status} <dark_gray>({info})"
+  footer: "<gray>Gunakan <yellow>/sg help<gray> untuk melihat perintah yang tersedia."
+  tip-title: "<yellow>Saran untuk Pemula:<reset>"
+  tip-line: "<gray>* <white>{tip}"
+  tips:
+    - "Pastikan file secret.key dicadangkan bersama database Anda."
+    - "Daftarkan UUID staf terpercaya di opguard untuk mencegah backdoor OP."
+    - "Aktifkan 2FA untuk akun berhak tinggi guna mencegah pembajakan akun."
+
+help:
+  header: "<gold>=== Bantuan Perintah SaryuGuard ===<reset>"
+  help: "<yellow>/sg help <gray>- Menampilkan menu bantuan"
+  status: "<yellow>/sg status <gray>- Menampilkan status operasional modul"
+  reload: "<yellow>/sg reload <gray>- Memuat ulang konfigurasi dan modul"
+  version: "<yellow>/sg version <gray>- Menampilkan informasi versi plugin"
+  plugins: "<yellow>/sg plugins [page] <gray>- Menampilkan verifikasi jar plugin"
+  plugins-approve: "<yellow>/sg plugins approve <plugin> <gray>- Menyetujui hash jar plugin baru"
+  scan-verify: "<yellow>/sg scan verify <gray>- Memeriksa integritas jar secara manual"
+  scan-malware: "<yellow>/sg scan malware <gray>- Menjalankan scanner malware eksternal"
+  opguard: "<yellow>/sg opguard <gray>- Manajemen perlindungan operator"
+  mfa: "<yellow>/sg 2fa <gray>- Manajemen autentikasi dua faktor staf"
+  words: "<yellow>/sg words <gray>- Manajemen daftar kata filter chat"
+  audit: "<yellow>/sg audit [page|verify] <gray>- Melihat log audit dan verifikasi rantai hash"
+  connection: "<yellow>/sg connection <gray>- Informasi perlindungan koneksi"
+  crypt: "<yellow>/sg crypt <gray>- Manajemen enkripsi dan rotasi kunci"
+
+version:
+  info: "<gold>SaryuGuard <yellow>v{version} <gray>(Commit: {commit}, Channel: {channel}) running on Java {java}."
+
+modules:
+  status:
+    active: "<green><bold>ACTIVE</bold></green>"
+    degraded: "<gold><bold>DEGRADED</bold></gold>"
+    disabled: "<gray><bold>DISABLED</bold></gray>"
+    error: "<red><bold>ERROR</bold></red>"

@@ -1,0 +1,47 @@
+# SaryuGuard English Localization (en)
+prefix: "<dark_gray>[<gold>Saryu<red>Guard<dark_gray>]<reset> "
+
+core:
+  no-permission: "<red>You do not have permission to execute this command."
+  player-only: "<red>This command can only be executed by in-game players."
+  reload-success: "<green>SaryuGuard configuration and modules reloaded successfully."
+  reload-failed: "<red>Failed to reload configuration: <gray>{error}"
+  unknown-subcommand: "<red>Unknown subcommand. Type <yellow>/sg help<red> for help."
+
+status:
+  header: "<gold>=== SaryuGuard System Status ===<reset>"
+  line: "<gray>- <white>{module}: {status} <dark_gray>({info})"
+  footer: "<gray>Use <yellow>/sg help<gray> to view available commands."
+  tip-title: "<yellow>Tips for Beginners:<reset>"
+  tip-line: "<gray>* <white>{tip}"
+  tips:
+    - "Ensure secret.key is backed up alongside your database."
+    - "Register trusted staff UUIDs in opguard to prevent unauthorized OP escalations."
+    - "Enable 2FA for privileged accounts to prevent account takeovers."
+
+help:
+  header: "<gold>=== SaryuGuard Help ===<reset>"
+  help: "<yellow>/sg help <gray>- Show this help menu"
+  status: "<yellow>/sg status <gray>- Show operational module statuses"
+  reload: "<yellow>/sg reload <gray>- Reload configuration and modules"
+  version: "<yellow>/sg version <gray>- Show plugin version information"
+  plugins: "<yellow>/sg plugins [page] <gray>- Show plugin JAR verification"
+  plugins-approve: "<yellow>/sg plugins approve <plugin> <gray>- Approve new plugin JAR hash"
+  scan-verify: "<yellow>/sg scan verify <gray>- Manually check JAR integrity"
+  scan-malware: "<yellow>/sg scan malware <gray>- Run external malware scanner"
+  opguard: "<yellow>/sg opguard <gray>- Operator guard management"
+  mfa: "<yellow>/sg 2fa <gray>- Staff two-factor authentication management"
+  words: "<yellow>/sg words <gray>- Chat filter word list management"
+  audit: "<yellow>/sg audit [page|verify] <gray>- View audit log and verify hash chain"
+  connection: "<yellow>/sg connection <gray>- Connection guard information"
+  crypt: "<yellow>/sg crypt <gray>- Encryption and key rotation management"
+
+version:
+  info: "<gold>SaryuGuard <yellow>v{version} <gray>(Commit: {commit}, Channel: {channel}) running on Java {java}."
+
+modules:
+  status:
+    active: "<green><bold>ACTIVE</bold></green>"
+    degraded: "<gold><bold>DEGRADED</bold></gold>"
+    disabled: "<gray><bold>DISABLED</bold></gray>"
+    error: "<red><bold>ERROR</bold></red>"
