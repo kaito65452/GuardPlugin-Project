@@ -58,6 +58,18 @@ opguard:
   check-interval-seconds: 60
   # Daftar UUID pemain yang sah menjadi OP
   allowed-ops: []
+  # Izinkan pengelolaan OpGuard dari dalam game (default false: hanya console)
+  manage-from-game: false
+  # Sumber resolusi nama -> UUID lokal
+  resolve:
+    sources:
+      luckperms: true
+      essentials: true
+      ops-json: true
+      bukkit-cache: true
+    bedrock-prefix:
+      enabled: false
+      prefix: "."
 
 staff-2fa:
   enabled: true

@@ -43,6 +43,9 @@ permissions:
   saryuguard.opguard:
     description: Access to /sg opguard management.
     default: op
+  saryuguard.opguard.manage:
+    description: Permission to manage OpGuard allowed-ops from in-game (add/remove/import).
+    default: false
   saryuguard.2fa.admin:
     description: Access to /sg 2fa management and reset.
     default: op

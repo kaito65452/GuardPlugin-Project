@@ -29,7 +29,7 @@ help:
   plugins-approve: "<yellow>/sg plugins approve <plugin> <gray>- Approve new plugin JAR hash"
   scan-verify: "<yellow>/sg scan verify <gray>- Manually check JAR integrity"
   scan-malware: "<yellow>/sg scan malware <gray>- Run external malware scanner"
-  opguard: "<yellow>/sg opguard <gray>- Operator guard management"
+  opguard: "<yellow>/sg opguard [info|reload|add|remove|list|import] <gray>- Operator guard management"
   mfa: "<yellow>/sg 2fa <gray>- Staff two-factor authentication management"
   words: "<yellow>/sg words <gray>- Chat filter word list management"
   audit: "<yellow>/sg audit [page|verify] <gray>- View audit log and verify hash chain"
