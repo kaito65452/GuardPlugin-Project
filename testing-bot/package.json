@@ -1,0 +1,12 @@
+{
+  "name": "guard-bot-tester",
+  "version": "1.0.0",
+  "description": "Mineflayer testing suite for AntiChatManager Lite & SaryuGuard",
+  "main": "test-bot.js",
+  "scripts": {
+    "test": "node test-bot.js"
+  },
+  "dependencies": {
+    "mineflayer": "^4.27.0"
+  }
+}

@@ -7,5 +7,6 @@ build/
 *.iml
 run/
 testing-server/
+testing-bot/node_modules/
 *.log
 local.properties
