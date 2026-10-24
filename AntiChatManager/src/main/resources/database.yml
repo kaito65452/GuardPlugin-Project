@@ -1,0 +1,15 @@
+# Database configuration for AntiChatManager Lite
+# type: SQLITE | MYSQL
+database:
+  type: SQLITE
+  sqlite:
+    file: "database/database.db"
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "minecraft"
+    username: "root"
+    password: ""
+    pool:
+      maximum-pool-size: 10
+      minimum-idle: 2

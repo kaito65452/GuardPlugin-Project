@@ -1,0 +1,16 @@
+# Active editable messages for AntiChatManager Lite
+# File ini tidak akan pernah ditimpa oleh plugin
+prefix: "<dark_gray>[<aqua>ACM<dark_gray>]<reset> "
+command-blocked: "<red>Perintah '<white>{command}</white>' diblokir oleh administrator server."
+no-permission: "<red>Anda tidak memiliki izin (antichatmanager.admin)."
+command-unknown: "<red>Subcommand tidak dikenal: <gray>{sub}. Ketik <yellow>/acm blacklist info<red> untuk bantuan."
+command-usage: "<yellow>Penggunaan: <white>{usage}"
+reload-success: "<green>AntiChatManager Lite berhasil dimuat ulang! Status kebijakan: <white>{status}"
+reload-failed: "<red>Gagal memuat ulang kebijakan database! Status kebijakan: <dark_red>{status}"
+add-success: "<green>Perintah '<white>{cmd}</white>' berhasil ditambahkan ke blacklist."
+add-failed: "<red>Gagal menyimpan perintah '<white>{cmd}</white>' ke database."
+add-error: "<red>Gagal menambahkan: <gray>{error}"
+remove-success: "<green>Perintah '<white>{cmd}</white>' berhasil dihapus dari blacklist."
+remove-failed: "<red>Perintah '<white>{cmd}</white>' tidak ditemukan atau gagal dihapus."
+blacklist-header: "<gold>=== Blacklist Commands ({count} entri) ==="
+version-info: "<gold>AntiChatManager Lite <yellow>v{version} <gray>(Commit: {commit}) - Policy Status: {status}"
