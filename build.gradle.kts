@@ -7,7 +7,7 @@
  * The resolved version is injected into every plugin.yml and into
  * build-info.properties so /acm info and the startup log can display it.
  */
-val baseVersion = "3.0.2"
+val baseVersion = "4.0.0"
 val releaseBuild = gradle.startParameter.projectProperties.containsKey("release")
 val gitCommit = run {
     try {

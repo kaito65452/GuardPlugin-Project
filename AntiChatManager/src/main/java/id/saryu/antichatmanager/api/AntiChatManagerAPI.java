@@ -1,14 +1,14 @@
 package id.saryu.antichatmanager.api;
 
 import id.saryu.antichatmanager.AntiChatManager;
-import id.saryu.antichatmanager.audit.PermissionAudit;
-import id.saryu.antichatmanager.conflict.ConflictDetector;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.List;
+import java.util.Set;
 
-/** Stable, small read API for other plugins. */
+/**
+ * Stable, small read API for other plugins in AntiChatManager Lite.
+ */
 public final class AntiChatManagerAPI {
 
     private final AntiChatManager plugin;
@@ -18,31 +18,31 @@ public final class AntiChatManagerAPI {
     }
 
     public boolean isBlacklisted(@NotNull String command) {
-        return plugin.getBlacklist().matchWithNested(command) != null;
+        return plugin.getBlacklistManager() != null && plugin.getBlacklistManager().isBlocked(command);
     }
 
     public boolean isAllowedFor(@NotNull Player player, @NotNull String command) {
-        String matched = plugin.getBlacklist().matchWithNested(command);
-        return matched == null || plugin.getBlacklist().isAllowedFor(player, matched);
+        if (player.hasPermission("antichatmanager.admin") || player.hasPermission("antichatmanager.bypass")) {
+            return true;
+        }
+        return !isBlacklisted(command);
     }
 
     public int blacklistSize() {
-        return plugin.getBlacklist().getAllEntries().size();
+        return plugin.getBlacklistManager() != null ? plugin.getBlacklistManager().getSnapshot().size() : 0;
     }
 
-    public @NotNull List<ConflictDetector.Conflict> conflicts() {
-        return plugin.getConflictDetector() == null ? List.of() : plugin.getConflictDetector().getOpen();
-    }
-
-    public @NotNull List<PermissionAudit.Finding> auditFindings() {
-        return plugin.getPermissionAudit() == null ? List.of() : plugin.getPermissionAudit().getOpen();
+    public @NotNull Set<String> getBlacklistedCommands() {
+        return plugin.getBlacklistManager() != null
+                ? plugin.getBlacklistManager().getSnapshot().getRawCommands()
+                : Set.of();
     }
 
     public @NotNull String version() {
-        return plugin.getBuildInfo().getVersion();
+        return plugin.getBuildInfo() != null ? plugin.getBuildInfo().getVersion() : "4.0.0";
     }
 
     public void reload() {
-        plugin.reloadAll();
+        plugin.reloadLite();
     }
 }

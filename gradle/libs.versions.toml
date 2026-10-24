@@ -8,12 +8,15 @@ hikaricp = "5.1.0"
 sqlite = "3.45.2.0"
 h2 = "2.2.224"
 mysql = "8.4.0"
-luckperms = "2.1.29"
+luckperms = "5.4"
 placeholderapi = "2.11.5"
 floodgate = "4.0.1-beta.1"
 packetevents = "2.11.2"
-shadow = "8.1.1"
+shadow = "9.6.1"
 junit = "5.11.4"
+toml4j = "0.7.2"
+re2j = "1.8"
+bouncycastle = "1.78.1"
 
 [libraries]
 # --- Paper / Adventure ---
@@ -34,9 +37,15 @@ placeholderapi = { group = "me.clip", name = "placeholderapi", version.ref = "pl
 floodgate-api = { group = "org.geysermc.floodgate", name = "floodgate-api", version.ref = "floodgate" }
 packetevents-api = { group = "com.github.retrooper", name = "packetevents-api", version.ref = "packetevents" }
 
+# --- Security & Utils (shaded into SaryuGuard) ---
+toml4j = { group = "com.moandjiezana.toml", name = "toml4j", version.ref = "toml4j" }
+re2j = { group = "com.google.re2j", name = "re2j", version.ref = "re2j" }
+bcprov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
+
 # --- Tests ---
 junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { group = "org.junit.platform", name = "junit-platform-launcher", version = "1.11.4" }
 
 [plugins]
-shadow = { id = "com.github.johnrengelman.shadow", version.ref = "shadow" }
+# Maintained fork (johnrengelman/shadow 8.1.1 breaks on Gradle 9 META-INF visits).
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }

@@ -60,6 +60,13 @@ public class DatabaseModule {
     private volatile int schemaVersion = 1;
     private volatile boolean available = false;
 
+    protected DatabaseModule() {
+        this.plugin = null;
+        this.cfg = null;
+        this.type = Type.SQLITE;
+        this.asyncDb = java.util.concurrent.Executors.newSingleThreadExecutor();
+    }
+
     public DatabaseModule(@NotNull SaryuLib plugin) {
         this.plugin = plugin;
         this.cfg = plugin.getConfigModule();
@@ -491,6 +498,10 @@ public class DatabaseModule {
     public @NotNull DataSource getDataSource() {
         if (dataSource == null) throw new IllegalStateException("Database not initialized.");
         return dataSource;
+    }
+
+    public @NotNull Connection getConnection() throws SQLException {
+        return getDataSource().getConnection();
     }
 
     public boolean isAvailable() {

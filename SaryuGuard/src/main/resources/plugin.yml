@@ -1,0 +1,66 @@
+name: SaryuGuard
+version: ${version}
+api-version: '1.21'
+main: id.saryu.saryuguard.SaryuGuardPlugin
+description: Advanced server security plugin for Paper servers (Paper 1.21.x - 26.x).
+author: Saryu
+website: https://github.com/saryu
+depend: [SaryuLibCore]
+softdepend: [LuckPerms, AuthMe, Sonar, GrimAC, Vulcan, Themis, NovaAC]
+load: POSTWORLD
+
+commands:
+  sg:
+    description: SaryuGuard administrative command.
+    usage: /sg help
+    aliases: [saryuguard]
+
+permissions:
+  saryuguard.admin:
+    description: Full access to /sg and all security management subcommands.
+    default: op
+  saryuguard.help:
+    description: Access to /sg help.
+    default: op
+  saryuguard.status:
+    description: Access to /sg status.
+    default: op
+  saryuguard.reload:
+    description: Access to /sg reload.
+    default: op
+  saryuguard.version:
+    description: Access to /sg version.
+    default: op
+  saryuguard.plugins:
+    description: Access to /sg plugins list and verification info.
+    default: op
+  saryuguard.plugins.approve:
+    description: Access to approve plugin jar hashes.
+    default: op
+  saryuguard.scan:
+    description: Access to /sg scan verify and /sg scan malware.
+    default: op
+  saryuguard.opguard:
+    description: Access to /sg opguard management.
+    default: op
+  saryuguard.2fa.admin:
+    description: Access to /sg 2fa management and reset.
+    default: op
+  saryuguard.2fa.required:
+    description: Mandatory 2FA requirement for player account.
+    default: op
+  saryuguard.words:
+    description: Access to /sg words chat filter management.
+    default: op
+  saryuguard.words.bypass:
+    description: Bypass chat filter inspection.
+    default: false
+  saryuguard.audit:
+    description: Access to /sg audit list and verification.
+    default: op
+  saryuguard.connection:
+    description: Access to /sg connection status and metrics.
+    default: op
+  saryuguard.crypt:
+    description: Access to /sg crypt status and key rotation (console only).
+    default: op

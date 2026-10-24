@@ -9,3 +9,4 @@ rootProject.name = "AntiChatManager"
 
 include("SaryuLibCore")
 include("AntiChatManager")
+include("SaryuGuard")

@@ -6,4 +6,6 @@ build/
 .idea/
 *.iml
 run/
+testing-server/
+*.log
 local.properties

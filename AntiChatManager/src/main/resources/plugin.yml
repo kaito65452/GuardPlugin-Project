@@ -2,35 +2,22 @@ name: AntiChatManager
 version: ${version}
 api-version: '1.21'
 main: id.saryu.antichatmanager.AntiChatManager
-description: Advanced chat and command management with blacklist, auto-scan, alerts, and punishments.
+description: AntiChatManager Lite 4.0.0 - High-performance command blacklist.
 author: Saryu
 website: https://github.com/saryu
 depend: [SaryuLibCore]
-softdepend: [LuckPerms, PlaceholderAPI, Floodgate, PacketEvents, WorldEdit, FastAsyncWorldEdit, WorldGuard]
 load: POSTWORLD
 
 commands:
   acm:
-    description: AntiChatManager administration command.
-    usage: /acm help
+    description: AntiChatManager Lite administration command.
+    usage: /acm blacklist info
     aliases: [antichatmanager]
-    # Per-subcommand permissions are enforced by the command framework. The
-    # root command itself stays unrestricted so dedicated admin permissions
-    # (integration/subcmd) can be granted without full /acm access.
 
 permissions:
-  saryuantichatmanager.admin:
-    description: Full access to /acm and all management subcommands.
+  antichatmanager.admin:
+    description: Full access to /acm commands.
     default: op
-  saryuantichatmanager.integration.admin:
-    description: Use /acm integration status, scan, reload and apply.
-    default: op
-  saryuantichatmanager.subcmd.admin:
-    description: Manage command/subcommand blacklist rules.
-    default: op
-  saryuantichatmanager.bypass:
-    description: Bypass the command blacklist and see all commands in tab completion.
-    default: op
-  saryuantichatmanager.alerts:
-    description: Receive staff alerts when a blacklisted command is attempted.
+  antichatmanager.bypass:
+    description: Bypass command blacklist rules.
     default: op

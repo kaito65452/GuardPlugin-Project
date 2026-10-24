@@ -1,0 +1,21 @@
+# SaryuGuard/src/main/resources/locales/id_ID.yml
+
+plugin:
+  enabled: "SaryuGuard telah diaktifkan!"
+  disabled: "SaryuGuard telah dinonaktifkan!"
+  reload-success: "Konfigurasi SaryuGuard berhasil dimuat ulang."
+  reload-fail: "Gagal memuat ulang konfigurasi SaryuGuard. Periksa konsol untuk kesalahan."
+  module-status: "Status modul {module}: {status}"
+
+commands:
+  no-permission: "Anda tidak memiliki izin untuk menggunakan perintah ini."
+  sg:
+    help-header: "&2--- Bantuan SaryuGuard ({page}/{total_pages}) ---"
+    help-entry: "&a/{command} &7- {description}"
+    help-footer: "&2--------------------------------------"
+    status-header: "&2--- Status SaryuGuard ---"
+    status-module-active: "&a{module}: AKTIF"
+    status-module-degraded: "&e{module}: MENURUN"
+    status-module-disabled: "&c{module}: DINONAKTIFKAN"
+    status-module-error: "&4{module}: ERROR"
+    status-footer: "&2--------------------------------------"
