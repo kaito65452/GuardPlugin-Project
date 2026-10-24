@@ -52,6 +52,10 @@ public class ConnectionGuardModule implements SaryuGuardModule, Listener {
     private volatile String compatAuthMe = "auto";
     private volatile String onMissing = "full";
 
+    // Proxy configuration
+    private volatile boolean proxyEnabled = false;
+    private final Set<String> trustedProxies = ConcurrentHashMap.newKeySet();
+
     // Dynamic Delegation Flags
     private volatile boolean delegateThrottleToSonar = false;
     private volatile boolean delegateAccountToAuthMe = false;
@@ -173,6 +177,17 @@ public class ConnectionGuardModule implements SaryuGuardModule, Listener {
         this.compatSonar = cfg.getString("connection-guard.compat.sonar", "auto");
         this.compatAuthMe = cfg.getString("connection-guard.compat.authme", "auto");
         this.onMissing = cfg.getString("connection-guard.compat.on-missing", "full");
+
+        this.proxyEnabled = cfg.getBoolean("connection-guard.proxy.enabled", false);
+        List<String> proxies = cfg.getStringList("connection-guard.proxy.trusted-proxies");
+        this.trustedProxies.clear();
+        if (proxies != null) {
+            for (String p : proxies) {
+                if (p != null && !p.isBlank()) {
+                    this.trustedProxies.add(p.trim().toLowerCase(Locale.ROOT));
+                }
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -186,6 +201,7 @@ public class ConnectionGuardModule implements SaryuGuardModule, Listener {
         totalChecked.incrementAndGet();
         InetAddress addr = event.getAddress();
         String ip = addr != null ? addr.getHostAddress() : "unknown";
+        boolean isTrustedProxy = proxyEnabled && trustedProxies.contains(ip.toLowerCase(Locale.ROOT));
         String name = event.getName();
         UUID uuid = event.getUniqueId();
         long now = System.currentTimeMillis();
@@ -211,8 +227,8 @@ public class ConnectionGuardModule implements SaryuGuardModule, Listener {
             }
         }
 
-        // 3. IP Connection Throttle (passive if delegated to Sonar)
-        if (!delegateThrottleToSonar) {
+        // 3. IP Connection Throttle (passive if delegated to Sonar or from trusted proxy)
+        if (!delegateThrottleToSonar && !isTrustedProxy) {
             Long lastConn = lastIpConnect.get(ip);
             long requiredThrottle = ipThrottleMs;
 
@@ -235,8 +251,8 @@ public class ConnectionGuardModule implements SaryuGuardModule, Listener {
             lastIpConnect.put(ip, now);
         }
 
-        // 4. Accounts per IP limit (CGNAT tolerant; passive if delegated to AuthMe)
-        if (!delegateAccountToAuthMe && maxAccountsPerIp > 0 && name != null) {
+        // 4. Accounts per IP limit (CGNAT tolerant; passive if delegated to AuthMe or trusted proxy)
+        if (!delegateAccountToAuthMe && !isTrustedProxy && maxAccountsPerIp > 0 && name != null) {
             Set<String> accounts = accountsPerIp.computeIfAbsent(ip, k -> ConcurrentHashMap.newKeySet());
             if (accounts.size() >= maxAccountsPerIp && !accounts.contains(name.toLowerCase(Locale.ROOT))) {
                 throttledConnections.incrementAndGet();
@@ -246,7 +262,14 @@ public class ConnectionGuardModule implements SaryuGuardModule, Listener {
             }
             accounts.add(name.toLowerCase(Locale.ROOT));
             if (accountsPerIp.size() > 5000) {
-                accountsPerIp.clear(); // bound memory
+                // Bounded eviction: evict oldest/sample up to 1000 entries rather than clearing all
+                int evicted = 0;
+                Iterator<String> it = accountsPerIp.keySet().iterator();
+                while (it.hasNext() && evicted < 1000) {
+                    it.next();
+                    it.remove();
+                    evicted++;
+                }
             }
         }
 
@@ -264,6 +287,7 @@ public class ConnectionGuardModule implements SaryuGuardModule, Listener {
         InetAddress addr = event.getAddress();
         if (addr == null) return;
         String ip = addr.getHostAddress();
+        if (proxyEnabled && trustedProxies.contains(ip.toLowerCase(Locale.ROOT))) return;
         long currentSecond = System.currentTimeMillis() / 1000L;
 
         PingCounter counter = pingsPerIp.compute(ip, (k, existing) -> {

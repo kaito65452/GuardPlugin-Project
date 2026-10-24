@@ -1,7 +1,12 @@
 package id.saryu.saryuguard.compat;
 
 import id.saryu.saryuguard.SaryuGuardPlugin;
+import id.saryu.saryuguard.connection.ConnectionGuardModule;
 import org.bukkit.Bukkit;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.server.PluginDisableEvent;
+import org.bukkit.event.server.PluginEnableEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginManager;
 import org.jetbrains.annotations.NotNull;
@@ -24,7 +29,7 @@ import java.util.logging.Level;
  * AuthMe present: auth commands not blocked and arguments never saved;
  * 2FA starts AFTER successful AuthMe login.</p>
  */
-public class CompatService {
+public class CompatService implements Listener {
 
     public enum KnownAntiCheat {
         GRIM_AC("GrimAC", true),
@@ -165,5 +170,44 @@ public class CompatService {
             return clean.substring(0, space) + " [REDACTED]";
         }
         return clean;
+    }
+
+    @EventHandler
+    public void onPluginDisable(PluginDisableEvent event) {
+        if (event == null || event.getPlugin() == null) return;
+        String name = event.getPlugin().getName();
+        if ("AuthMe".equalsIgnoreCase(name) || "Sonar".equalsIgnoreCase(name) || isKnownAntiCheatName(name)) {
+            scan();
+            notifyConnectionGuard();
+        }
+    }
+
+    @EventHandler
+    public void onPluginEnable(PluginEnableEvent event) {
+        if (event == null || event.getPlugin() == null) return;
+        String name = event.getPlugin().getName();
+        if ("AuthMe".equalsIgnoreCase(name) || "Sonar".equalsIgnoreCase(name) || isKnownAntiCheatName(name)) {
+            scan();
+            notifyConnectionGuard();
+        }
+    }
+
+    private void notifyConnectionGuard() {
+        if (plugin != null) {
+            try {
+                ConnectionGuardModule connModule = (ConnectionGuardModule) plugin.getModule("connection-guard");
+                if (connModule != null) {
+                    connModule.evaluateCompatibility();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private boolean isKnownAntiCheatName(String name) {
+        for (KnownAntiCheat ac : KnownAntiCheat.values()) {
+            if (ac.getPluginName().equalsIgnoreCase(name)) return true;
+        }
+        return false;
     }
 }

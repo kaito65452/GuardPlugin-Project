@@ -35,7 +35,7 @@ public class LiteCommandListener implements Listener {
     private final LiteBlacklistManager blacklist;
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
 
-    private boolean allowOpBypass = true;
+    private boolean allowOpBypass = false;
     private String blockedMessage = "<red>Perintah '<white>{command}</white>' diblokir oleh administrator server.";
 
     public LiteCommandListener(@NotNull JavaPlugin plugin, @NotNull LiteBlacklistManager blacklist) {
@@ -44,7 +44,7 @@ public class LiteCommandListener implements Listener {
     }
 
     public void reloadConfig(@NotNull FileConfiguration config, @NotNull FileConfiguration messages) {
-        this.allowOpBypass = config.getBoolean("blacklist.bypass.allow-op", true);
+        this.allowOpBypass = config.getBoolean("blacklist.bypass.allow-op", false);
         this.blockedMessage = messages.getString("command-blocked",
                 "<red>Perintah '<white>{command}</white>' diblokir oleh administrator server.");
     }
@@ -58,12 +58,14 @@ public class LiteCommandListener implements Listener {
 
         Player player = event.getPlayer();
 
-        // Check administrative bypass permissions
-        if (player.hasPermission("antichatmanager.admin") || player.hasPermission("antichatmanager.bypass")) {
-            return;
-        }
-        if (allowOpBypass && player.isOp()) {
-            return;
+        // In UNAVAILABLE (emergency fallback) mode, emergency-blacklist applies strictly without OP bypass
+        if (blacklist.getStatus() != PolicyStatus.UNAVAILABLE) {
+            if (player.hasPermission("antichatmanager.admin") || player.hasPermission("antichatmanager.bypass")) {
+                return;
+            }
+            if (allowOpBypass && player.isOp()) {
+                return;
+            }
         }
 
         String raw = event.getMessage();

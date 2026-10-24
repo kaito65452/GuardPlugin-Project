@@ -2,6 +2,7 @@ package id.saryu.saryuguard.verify;
 
 import id.saryu.libcore.database.DatabaseModule;
 import id.saryu.saryuguard.SaryuGuardPlugin;
+import id.saryu.saryuguard.database.SaryuGuardDatabase;
 import id.saryu.saryuguard.module.ModuleStatus;
 import id.saryu.saryuguard.module.SaryuGuardModule;
 import org.bukkit.Bukkit;
@@ -20,6 +21,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -159,23 +161,26 @@ public class PluginVerifyModule implements SaryuGuardModule {
     }
 
     private void initDatabase() {
-        DatabaseModule db = plugin.getLib().getDatabaseModule();
-        if (!db.isAvailable()) {
+        SaryuGuardDatabase db = plugin.getDatabase();
+        if (db == null || !db.isAvailable()) {
             this.status = ModuleStatus.DEGRADED;
             this.statusMessage = "Database unavailable; running with memory baseline";
             return;
         }
 
         db.asyncVoid(conn -> {
-            try (PreparedStatement ps = conn.prepareStatement(
-                    "CREATE TABLE IF NOT EXISTS sg_plugin_baseline ("
-                            + "plugin_name TEXT PRIMARY KEY, "
-                            + "jar_hash TEXT NOT NULL, "
-                            + "jar_size BIGINT NOT NULL, "
-                            + "approved_at BIGINT NOT NULL, "
-                            + "approved_by TEXT NOT NULL, "
-                            + "status TEXT NOT NULL)")) {
-                ps.execute();
+            try (Statement st = conn.createStatement()) {
+                st.execute("CREATE TABLE IF NOT EXISTS sg_plugin_baseline ("
+                        + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        + "plugin_name TEXT NOT NULL, "
+                        + "jar_hash TEXT NOT NULL, "
+                        + "jar_size INTEGER DEFAULT 0, "
+                        + "hash_algo TEXT NOT NULL DEFAULT 'SHA-256', "
+                        + "status TEXT NOT NULL DEFAULT 'UNVERIFIED', "
+                        + "approver TEXT, "
+                        + "approved_at INTEGER, "
+                        + "created_at INTEGER NOT NULL, "
+                        + "UNIQUE (plugin_name, jar_hash))");
             } catch (SQLException e) {
                 plugin.getLogger().log(Level.WARNING, "Failed to create sg_plugin_baseline table: " + e.getMessage(), e);
             }
@@ -183,13 +188,13 @@ public class PluginVerifyModule implements SaryuGuardModule {
     }
 
     private void loadBaselineFromDb() {
-        DatabaseModule db = plugin.getLib().getDatabaseModule();
-        if (!db.isAvailable()) return;
+        SaryuGuardDatabase db = plugin.getDatabase();
+        if (db == null || !db.isAvailable()) return;
 
         db.async(conn -> {
             Map<String, BaselineEntry> loaded = new HashMap<>();
             try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT plugin_name, jar_hash, jar_size, approved_at, approved_by, status FROM sg_plugin_baseline");
+                    "SELECT plugin_name, jar_hash, jar_size, approved_at, approver, status FROM sg_plugin_baseline");
                  ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     BaselineEntry b = new BaselineEntry();
@@ -197,7 +202,7 @@ public class PluginVerifyModule implements SaryuGuardModule {
                     b.jarHash = rs.getString("jar_hash");
                     b.jarSize = rs.getLong("jar_size");
                     b.approvedAt = rs.getLong("approved_at");
-                    b.approvedBy = rs.getString("approved_by");
+                    b.approvedBy = rs.getString("approver");
                     b.status = rs.getString("status");
                     loaded.put(b.pluginName.toLowerCase(Locale.ROOT), b);
                 }
@@ -370,23 +375,19 @@ public class PluginVerifyModule implements SaryuGuardModule {
         info.approvedAt = now;
         info.details = "Disetujui secara manual oleh " + approvedBy;
 
-        DatabaseModule db = plugin.getLib().getDatabaseModule();
-        if (!db.isAvailable()) {
+        SaryuGuardDatabase db = plugin.getDatabase();
+        if (db == null || !db.isAvailable()) {
             return CompletableFuture.completedFuture(true);
         }
 
         return db.async(conn -> {
-            String sql = switch (db.getType()) {
-                case SQLITE -> "INSERT INTO sg_plugin_baseline (plugin_name, jar_hash, jar_size, approved_at, approved_by, status) "
-                        + "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(plugin_name) DO UPDATE SET "
-                        + "jar_hash=excluded.jar_hash, jar_size=excluded.jar_size, approved_at=excluded.approved_at, "
-                        + "approved_by=excluded.approved_by, status=excluded.status";
-                case MYSQL -> "INSERT INTO sg_plugin_baseline (plugin_name, jar_hash, jar_size, approved_at, approved_by, status) "
-                        + "VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE "
-                        + "jar_hash=VALUES(jar_hash), jar_size=VALUES(jar_size), approved_at=VALUES(approved_at), "
-                        + "approved_by=VALUES(approved_by), status=VALUES(status)";
-                case H2 -> "MERGE INTO sg_plugin_baseline (plugin_name, jar_hash, jar_size, approved_at, approved_by, status) "
-                        + "KEY(plugin_name) VALUES (?, ?, ?, ?, ?, ?)";
+            String sql = switch (db.getDbType()) {
+                case SQLITE -> "INSERT INTO sg_plugin_baseline (plugin_name, jar_hash, jar_size, approved_at, approver, status, created_at) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(plugin_name, jar_hash) DO UPDATE SET "
+                        + "jar_size=excluded.jar_size, approved_at=excluded.approved_at, "
+                        + "approver=excluded.approver, status=excluded.status";
+                case H2 -> "MERGE INTO sg_plugin_baseline (plugin_name, jar_hash, jar_size, approved_at, approver, status, created_at) "
+                        + "KEY(plugin_name, jar_hash) VALUES (?, ?, ?, ?, ?, ?, ?)";
             };
 
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -396,6 +397,7 @@ public class PluginVerifyModule implements SaryuGuardModule {
                 ps.setLong(4, b.approvedAt);
                 ps.setString(5, b.approvedBy);
                 ps.setString(6, b.status);
+                ps.setLong(7, now);
                 ps.executeUpdate();
                 return true;
             } catch (SQLException e) {

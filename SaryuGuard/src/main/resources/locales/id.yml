@@ -7,6 +7,13 @@ core:
   reload-success: "<green>Konfigurasi dan modul SaryuGuard berhasil dimuat ulang."
   reload-failed: "<red>Gagal memuat ulang konfigurasi: <gray>{error}"
   unknown-subcommand: "<red>Subcommand tidak dikenal. Ketik <yellow>/sg help<red> untuk bantuan."
+  usage: "<yellow>Penggunaan: <white>{usage}"
+  cooldown: "<red>Harap tunggu beberapa saat sebelum menjalankan perintah ini lagi."
+  error: "<red>Terjadi kesalahan internal: <gray>{error}"
+
+chat:
+  filtered-notice: "<red>Pesan Anda disembunyikan dari pemain lain karena melanggar aturan obrolan (<white>{reason}</white>)."
+  error-blocked: "<red>Pesan Anda dibatalkan sementara karena error pada sistem filter obrolan."
 
 status:
   header: "<gold>=== Status Sistem SaryuGuard ===<reset>"

@@ -11,11 +11,15 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.logging.Level;
 
 /**
@@ -53,6 +57,7 @@ public class ConfigManager {
         }
         validateFileSize(configFile, DEFAULT_MAX_CONFIG_BYTES);
         this.config = YamlConfiguration.loadConfiguration(configFile);
+        applyProfileDefaults();
 
         long maxBytes = this.config.getLong("security.max-config-bytes", DEFAULT_MAX_CONFIG_BYTES);
 
@@ -94,6 +99,48 @@ public class ConfigManager {
         loadSecretKey();
     }
 
+    private void applyProfileDefaults() {
+        if (config == null) return;
+        String profile = config.getString("profile", "standard").toLowerCase(Locale.ROOT);
+        switch (profile) {
+            case "beginner" -> {
+                config.addDefault("opguard.mode", "warn");
+                config.addDefault("plugin-verify.network-lookup", false);
+                config.addDefault("malware-scanner.enabled", false);
+                config.addDefault("staff-2fa.enabled", false);
+                config.addDefault("connection-guard.attack-mode.enabled", false);
+                config.addDefault("connection-guard.ip-throttle-ms", 1000L);
+                config.addDefault("chat-filter.on-error", "allow");
+            }
+            case "strict" -> {
+                config.addDefault("opguard.mode", "enforce");
+                config.addDefault("opguard.manage-from-game", false);
+                config.addDefault("plugin-verify.network-lookup", true);
+                config.addDefault("staff-2fa.enabled", true);
+                config.addDefault("staff-2fa.max-attempts", 3);
+                config.addDefault("staff-2fa.session-timeout-seconds", 120);
+                config.addDefault("connection-guard.attack-mode.enabled", true);
+                config.addDefault("connection-guard.ip-throttle-ms", 5000L);
+                config.addDefault("connection-guard.max-accounts-per-ip", 3);
+                config.addDefault("chat-filter.on-error", "block");
+                config.addDefault("database.encryption.mask-ip", true);
+            }
+            default -> { // standard
+                config.addDefault("opguard.mode", "enforce");
+                config.addDefault("plugin-verify.network-lookup", false);
+                config.addDefault("malware-scanner.enabled", false);
+                config.addDefault("staff-2fa.enabled", true);
+                config.addDefault("connection-guard.attack-mode.enabled", true);
+                config.addDefault("connection-guard.ip-throttle-ms", 3000L);
+                config.addDefault("chat-filter.on-error", "allow");
+            }
+        }
+    }
+
+    public @NotNull String getProfile() {
+        return config != null ? config.getString("profile", "standard").toLowerCase(Locale.ROOT) : "standard";
+    }
+
     private void loadSecretKey() {
         String mode = "auto_key";
         String envVar = "SARYUGUARD_KEY";
@@ -103,7 +150,7 @@ public class ConfigManager {
         if (secretToml != null) {
             String cfgMode = secretToml.getString("encryption.mode");
             if (cfgMode != null && !cfgMode.isBlank()) {
-                mode = cfgMode.trim().toLowerCase();
+                mode = cfgMode.trim().toLowerCase(Locale.ROOT);
             }
             String cfgEnv = secretToml.getString("encryption.env_var");
             if (cfgEnv != null && !cfgEnv.isBlank()) {
@@ -131,44 +178,98 @@ public class ConfigManager {
                 if (passphrase.isBlank()) {
                     throw new IllegalStateException("Passphrase enkripsi kosong di secret.toml.");
                 }
-                MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
-                sha256.update(salt.getBytes(StandardCharsets.UTF_8));
-                this.secretKey = sha256.digest(passphrase.getBytes(StandardCharsets.UTF_8));
+                byte[] saltBytes;
+                if (salt.isBlank()) {
+                    saltBytes = "SaryuGuardDefaultSaltValue".getBytes(StandardCharsets.UTF_8);
+                } else {
+                    saltBytes = salt.getBytes(StandardCharsets.UTF_8);
+                }
+                if (saltBytes.length < 16) {
+                    MessageDigest sha = MessageDigest.getInstance("SHA-256");
+                    saltBytes = Arrays.copyOf(sha.digest(saltBytes), 16);
+                }
+                char[] passChars = passphrase.toCharArray();
+                try {
+                    id.saryu.saryuguard.mfa.SecretCipher sc = id.saryu.saryuguard.mfa.SecretCipher.fromPassphrase(passChars, saltBytes);
+                    this.secretKey = sc.getKeyBytesCopy();
+                    sc.destroy();
+                } finally {
+                    Arrays.fill(passChars, '\0');
+                }
             } else {
                 // auto_key mode: secret.key file
                 File keyFile = safeFile(SECRET_KEY_FILE);
+                File dbFile = new File(plugin.getDataFolder(), "saryuguard.db");
                 if (!keyFile.exists() || keyFile.length() != 32) {
+                    if (dbFile.exists() && dbFile.length() > 0) {
+                        throw new IllegalStateException("File secret.key tidak ditemukan padahal database "
+                                + dbFile.getName() + " sudah ada! Menolak membuat kunci acak baru untuk mencegah rusaknya data terenkripsi. Pulihkan backup secret.key.");
+                    }
                     byte[] genKey = new byte[32];
                     new SecureRandom().nextBytes(genKey);
                     Files.write(keyFile.toPath(), genKey);
+                    setPosixPermissions(keyFile);
                     this.secretKey = genKey;
                     plugin.getLogger().info("[Crypt] Kunci AES-256 acak baru dibuat di " + SECRET_KEY_FILE);
                 } else {
                     this.secretKey = Files.readAllBytes(keyFile.toPath());
+                    setPosixPermissions(keyFile);
                 }
             }
         } catch (Exception e) {
             plugin.getLogger().log(Level.SEVERE, "Gagal menginisialisasi secret key enkripsi: " + e.getMessage(), e);
-            // Fallback emergency in-memory key so server does not crash
-            byte[] emergencyKey = new byte[32];
-            new SecureRandom().nextBytes(emergencyKey);
-            this.secretKey = emergencyKey;
+            throw new IllegalStateException("Inisialisasi secret key gagal: " + e.getMessage(), e);
         }
     }
 
-    public synchronized void rotateSecretKeyFile(byte[] newKeyBytes) throws IOException {
+    private void setPosixPermissions(File file) {
+        try {
+            if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+                Files.setPosixFilePermissions(file.toPath(), PosixFilePermissions.fromString("rw-------"));
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("Tidak dapat mengatur permission 0600 pada " + file.getName() + ": " + e.getMessage());
+        }
+    }
+
+    public synchronized void prepareRotateSecretKeyFile(byte[] newKeyBytes) throws IOException {
         if (newKeyBytes == null || newKeyBytes.length != 32) {
             throw new IllegalArgumentException("Panjang kunci harus tepat 32 byte.");
         }
         File keyFile = safeFile(SECRET_KEY_FILE);
         Path tmp = keyFile.toPath().resolveSibling(SECRET_KEY_FILE + ".tmp");
         Files.write(tmp, newKeyBytes);
-        try {
-            Files.move(tmp, keyFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (Exception e) {
-            Files.move(tmp, keyFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        setPosixPermissions(tmp.toFile());
+    }
+
+    public synchronized void commitRotateSecretKeyFile(byte[] newKeyBytes) throws IOException {
+        File keyFile = safeFile(SECRET_KEY_FILE);
+        Path tmp = keyFile.toPath().resolveSibling(SECRET_KEY_FILE + ".tmp");
+        if (Files.exists(tmp)) {
+            try {
+                Files.move(tmp, keyFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (Exception e) {
+                Files.move(tmp, keyFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+        } else {
+            Files.write(keyFile.toPath(), newKeyBytes);
         }
-        this.secretKey = newKeyBytes;
+        setPosixPermissions(keyFile);
+        this.secretKey = newKeyBytes.clone();
+    }
+
+    public synchronized void abortRotateSecretKeyFile() {
+        try {
+            File keyFile = safeFile(SECRET_KEY_FILE);
+            Path tmp = keyFile.toPath().resolveSibling(SECRET_KEY_FILE + ".tmp");
+            Files.deleteIfExists(tmp);
+        } catch (Exception ignored) {
+        }
+    }
+
+    public synchronized void rotateSecretKeyFile(byte[] newKeyBytes) throws IOException {
+        prepareRotateSecretKeyFile(newKeyBytes);
+        commitRotateSecretKeyFile(newKeyBytes);
     }
 
     public @NotNull File safeFile(@NotNull String relativePath) {

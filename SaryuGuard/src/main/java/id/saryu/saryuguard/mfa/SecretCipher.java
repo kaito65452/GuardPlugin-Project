@@ -8,6 +8,8 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Arrays;
@@ -87,20 +89,28 @@ public final class SecretCipher {
     }
 
     public static SecretCipher fromPassphrase(char[] passphrase, byte[] salt, int keyVersion) {
-        byte[] passBytes = new String(passphrase).getBytes(StandardCharsets.UTF_8);
-        Argon2Parameters params = new Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
-                .withVersion(Argon2Parameters.ARGON2_VERSION_13)
-                .withIterations(3)
-                .withMemoryAsKB(65536) // 64 MB
-                .withParallelism(1)
-                .withSalt(salt)
-                .build();
-        Argon2BytesGenerator gen = new Argon2BytesGenerator();
-        gen.init(params);
-        byte[] derived = new byte[32];
-        gen.generateBytes(passBytes, derived, 0, 32);
-        Arrays.fill(passBytes, (byte) 0);
-        return new SecretCipher(derived, keyVersion);
+        ByteBuffer buf = StandardCharsets.UTF_8.encode(CharBuffer.wrap(passphrase));
+        byte[] passBytes = new byte[buf.remaining()];
+        buf.get(passBytes);
+        try {
+            Argon2Parameters params = new Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
+                    .withVersion(Argon2Parameters.ARGON2_VERSION_13)
+                    .withIterations(3)
+                    .withMemoryAsKB(65536) // 64 MB
+                    .withParallelism(1)
+                    .withSalt(salt)
+                    .build();
+            Argon2BytesGenerator gen = new Argon2BytesGenerator();
+            gen.init(params);
+            byte[] derived = new byte[32];
+            gen.generateBytes(passBytes, derived, 0, 32);
+            return new SecretCipher(derived, keyVersion);
+        } finally {
+            Arrays.fill(passBytes, (byte) 0);
+            if (buf.hasArray()) {
+                Arrays.fill(buf.array(), (byte) 0);
+            }
+        }
     }
 
     /**

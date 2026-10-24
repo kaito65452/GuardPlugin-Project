@@ -119,6 +119,9 @@ public class CryptService {
         byte[] newKeyBytes = SecretCipher.generateKey();
         SecretCipher newCipher = new SecretCipher(newKeyBytes, newVersion);
 
+        // Pre-stage key file to .tmp before touching database
+        plugin.getConfigManager().prepareRotateSecretKeyFile(newKeyBytes);
+
         int total = 0;
         try (Connection c = db.getConnection()) {
             c.setAutoCommit(false);
@@ -130,14 +133,15 @@ public class CryptService {
             } catch (Exception e) {
                 c.rollback();
                 newCipher.destroy();
+                plugin.getConfigManager().abortRotateSecretKeyFile();
                 throw e;
             } finally {
                 c.setAutoCommit(true);
             }
         }
 
-        // Persist new key only after DB commit succeeds
-        plugin.getConfigManager().rotateSecretKeyFile(newKeyBytes);
+        // Commit atomic move of key file after DB commit
+        plugin.getConfigManager().commitRotateSecretKeyFile(newKeyBytes);
         oldCipher.destroy();
         this.cipher = newCipher;
         this.keyVersion = newVersion;

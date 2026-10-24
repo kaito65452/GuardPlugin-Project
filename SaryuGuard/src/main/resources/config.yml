@@ -8,6 +8,12 @@
 # Bahasa default: id (Bahasa Indonesia) atau en (English)
 locale: "id"
 
+# Profil konfigurasi: beginner | standard | strict
+# - beginner: proteksi dasar, opguard mode warn, 2FA opsional, attack mode nonaktif
+# - standard: proteksi seimbang (rekomendasi produksi)
+# - strict: proteksi ketat, session timeout pendek, 2FA maks 3 percobaan, throttle agresif
+profile: "standard"
+
 # Pengaturan Keamanan Umum
 security:
   # Batas ukuran maksimum file konfigurasi yang diizinkan untuk dimuat (dalam byte)

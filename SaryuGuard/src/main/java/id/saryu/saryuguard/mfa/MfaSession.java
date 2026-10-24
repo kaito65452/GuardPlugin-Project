@@ -15,6 +15,7 @@ public final class MfaSession {
     private volatile long pendingSince; // System.currentTimeMillis() when PENDING_MFA was set
     private final AtomicInteger failedAttempts = new AtomicInteger(0);
     private volatile long nextAttemptAt;  // epoch ms; 0 = no delay
+    private volatile long lastUsedCounter = -1;
 
     public MfaSession(UUID uuid, MfaState initialState) {
         this.uuid = uuid;
@@ -55,6 +56,9 @@ public final class MfaSession {
     // -------------------------------------------------------------------------
     // Attempt tracking
     // -------------------------------------------------------------------------
+
+    public long getLastUsedCounter() { return lastUsedCounter; }
+    public void setLastUsedCounter(long counter) { this.lastUsedCounter = counter; }
 
     public int getFailedAttempts() { return failedAttempts.get(); }
 

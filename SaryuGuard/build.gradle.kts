@@ -93,6 +93,11 @@ tasks.shadowJar {
     isPreserveFileTimestamps = false
     archiveClassifier.set("")
 
+    minimize {
+        exclude(dependency(libs.re2j.get()))
+        exclude(dependency(libs.toml4j.get()))
+    }
+
     // Relocate pure-Java shaded libraries away from the global classpath
     relocate("com.moandjiezana.toml", "id.saryu.saryuguard.lib.toml")
     relocate("com.google.re2j", "id.saryu.saryuguard.lib.re2j")

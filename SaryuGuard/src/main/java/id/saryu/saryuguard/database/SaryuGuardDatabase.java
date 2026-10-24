@@ -232,6 +232,7 @@ public class SaryuGuardDatabase {
                 """);
         }
         ensureMetaColumn(c, "key_version", "INTEGER NOT NULL DEFAULT 1");
+        ensureMetaColumn(c, "retention_anchor_hash", "TEXT NOT NULL DEFAULT '0000000000000000000000000000000000000000000000000000000000000000'");
         try (PreparedStatement ps = c.prepareStatement(
                 "SELECT COUNT(*) FROM sg_meta WHERE id = 1")) {
             ResultSet rs = ps.executeQuery();
@@ -249,6 +250,28 @@ public class SaryuGuardDatabase {
             st.execute("ALTER TABLE sg_meta ADD COLUMN " + column + " " + definition);
         } catch (SQLException ignored) {
             // Column already exists
+        }
+    }
+
+    public String getRetentionAnchorHash(@NotNull Connection c) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT retention_anchor_hash FROM sg_meta WHERE id = 1")) {
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                String h = rs.getString(1);
+                if (h != null && h.length() == 64) return h;
+            }
+            return "0000000000000000000000000000000000000000000000000000000000000000";
+        } catch (SQLException e) {
+            return "0000000000000000000000000000000000000000000000000000000000000000";
+        }
+    }
+
+    public void setRetentionAnchorHash(@NotNull Connection c, String anchorHash) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "UPDATE sg_meta SET retention_anchor_hash = ? WHERE id = 1")) {
+            ps.setString(1, anchorHash);
+            ps.executeUpdate();
         }
     }
 
@@ -288,6 +311,7 @@ public class SaryuGuardDatabase {
                     id           INTEGER PRIMARY KEY AUTOINCREMENT,
                     plugin_name  TEXT    NOT NULL,
                     jar_hash     TEXT    NOT NULL,
+                    jar_size     INTEGER DEFAULT 0,
                     hash_algo    TEXT    NOT NULL DEFAULT 'SHA-256',
                     status       TEXT    NOT NULL DEFAULT 'UNVERIFIED',
                     approver     TEXT,

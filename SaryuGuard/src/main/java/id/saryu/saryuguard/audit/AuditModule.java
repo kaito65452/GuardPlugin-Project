@@ -215,7 +215,7 @@ public class AuditModule implements SaryuGuardModule, Listener {
         synchronized (writeLock) {
             try (Connection c = db.getConnection()) {
                 List<AuditDao.ChainLink> links = dao.listAscending(c);
-                String prev = AuditChain.GENESIS_HASH;
+                String prev = db.getRetentionAnchorHash(c);
                 int checked = 0;
                 for (AuditDao.ChainLink link : links) {
                     String detailsPlain = decryptField(crypt, link.detailsEnc(),
@@ -329,10 +329,30 @@ public class AuditModule implements SaryuGuardModule, Listener {
 
     private void writerLoop() {
         while (running.get() || !queue.isEmpty()) {
+            AuditRecord rec = null;
             try {
-                AuditRecord rec = queue.poll(200, TimeUnit.MILLISECONDS);
+                rec = queue.poll(200, TimeUnit.MILLISECONDS);
                 if (rec == null) continue;
-                persist(rec);
+
+                boolean written = false;
+                for (int attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        persist(rec);
+                        written = true;
+                        break;
+                    } catch (Exception ex) {
+                        if (attempt < 2) {
+                            try {
+                                Thread.sleep(50L * (attempt + 1));
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                                break;
+                            }
+                        } else {
+                            throw ex;
+                        }
+                    }
+                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
@@ -517,19 +537,21 @@ public class AuditModule implements SaryuGuardModule, Listener {
         long cutoff = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(retentionDays);
         synchronized (writeLock) {
             try (Connection c = db.getConnection()) {
+                String lastDeletedHash = dao.latestChainHashBefore(c, cutoff);
                 int deleted = dao.deleteOlderThan(c, cutoff);
                 if (deleted > 0) {
+                    if (lastDeletedHash != null) {
+                        db.setRetentionAnchorHash(c, lastDeletedHash);
+                    }
                     log.info("[Audit] Retensi: menghapus " + deleted + " baris lebih tua dari "
                             + retentionDays + " hari.");
-                    // After deletion, chain from genesis may break for remaining rows.
-                    // We keep remaining chain intact among themselves; verification
-                    // recomputes from DB order. If oldest deleted, re-anchor head from DB.
+                    // Re-anchor head from DB
                     String hash = dao.latestChainHash(c);
                     if (hash != null) {
                         headHash = hash;
                         headId = dao.latestId(c);
                     } else {
-                        headHash = AuditChain.GENESIS_HASH;
+                        headHash = lastDeletedHash != null ? lastDeletedHash : AuditChain.GENESIS_HASH;
                         headId = 0L;
                     }
                     writeCheckpointSafe();

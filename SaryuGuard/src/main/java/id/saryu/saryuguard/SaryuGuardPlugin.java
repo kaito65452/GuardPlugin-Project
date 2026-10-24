@@ -83,6 +83,7 @@ public class SaryuGuardPlugin extends JavaPlugin {
         this.compatService = new CompatService(this);
         try {
             this.compatService.scan();
+            Bukkit.getPluginManager().registerEvents(this.compatService, this);
         } catch (Exception e) {
             getLogger().log(Level.WARNING, "Pemeriksaan kompatibilitas awal gagal: " + e.getMessage(), e);
         }

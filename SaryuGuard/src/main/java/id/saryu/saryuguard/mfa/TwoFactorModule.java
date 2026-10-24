@@ -191,6 +191,10 @@ public class TwoFactorModule implements SaryuGuardModule, Listener {
         // Only engage 2FA for players with the required permission
         if (!player.hasPermission(requiredPermission)) return;
 
+        // Immediately put player in PENDING_MFA to prevent any bypass window during async load
+        sessions.computeIfAbsent(uuid, k -> new MfaSession(uuid, MfaState.PENDING_MFA));
+        applyRestrictions(player);
+
         // Warm secret cache from encrypted DB (async → then continue on main)
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             loadSecretFromDb(uuid);
@@ -213,10 +217,6 @@ public class TwoFactorModule implements SaryuGuardModule, Listener {
             return;
         }
 
-        // Move to PENDING_MFA
-        MfaSession session = new MfaSession(uuid, MfaState.PENDING_MFA);
-        sessions.put(uuid, session);
-
         // If no TOTP secret registered, prompt to set up
         if (!totpSecrets.containsKey(uuid)) {
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -228,7 +228,7 @@ public class TwoFactorModule implements SaryuGuardModule, Listener {
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (player.isOnline()) {
                     player.sendMessage(Component.text(
-                            "[SaryuGuard] 2FA diperlukan. Masukkan kode TOTP 6-digit dari aplikasi authenticator Anda.",
+                            "[SaryuGuard] 2FA diperlukan. Masukkan kode TOTP 6-digit dari aplikasi authenticator Anda (atau recovery code).",
                             NamedTextColor.YELLOW));
                 }
             }, 20L);
@@ -279,18 +279,48 @@ public class TwoFactorModule implements SaryuGuardModule, Listener {
             return;
         }
 
-        // Verify TOTP code
+        // Verify TOTP code or recovery code
         String storedSecretB32 = totpSecrets.get(uuid);
         boolean verified = false;
-        try {
-            byte[] secretBytes = Base32.decode(storedSecretB32);
-            verified = TotpEngine.verify(secretBytes, input);
-        } catch (Exception e) {
-            log.warning("[2FA] Error verifikasi TOTP untuk " + uuid + ": " + e.getMessage());
-            // Fail-safe: treat as wrong code (never auto-authenticate on error)
+        long matchedCounter = -1;
+
+        if (input.matches("\\d{6}")) {
+            try {
+                byte[] secretBytes = Base32.decode(storedSecretB32);
+                matchedCounter = TotpEngine.verifyAndGetCounter(secretBytes, input, session.getLastUsedCounter());
+                verified = (matchedCounter != -1);
+            } catch (Exception e) {
+                log.warning("[2FA] Error verifikasi TOTP untuk " + uuid + ": " + e.getMessage());
+            }
+        } else {
+            // Check recovery codes
+            String hashesJson = recoveryHashes.get(uuid);
+            if (hashesJson != null && hashesJson.contains("$")) {
+                List<String> list = parseJsonArray(hashesJson);
+                for (int i = 0; i < list.size(); i++) {
+                    String h = list.get(i);
+                    if (RecoveryCodes.verify(input, h)) {
+                        verified = true;
+                        list.remove(i);
+                        String updated = toJsonArray(list);
+                        recoveryHashes.put(uuid, updated);
+                        if (persistenceReady) {
+                            SaryuGuardDatabase db = plugin.getDatabase();
+                            db.asyncVoid(c -> twoFactorDao.updateRecoveryHashes(c, uuid, updated));
+                        }
+                        event.getPlayer().sendMessage(Component.text(
+                                "[SaryuGuard] ✓ Recovery code diterima! Sisa kode pemulihan: " + list.size(),
+                                NamedTextColor.GREEN));
+                        break;
+                    }
+                }
+            }
         }
 
         if (verified) {
+            if (matchedCounter != -1) {
+                session.setLastUsedCounter(matchedCounter);
+            }
             authenticatePlayer(event.getPlayer(), session);
         } else {
             handleFailedAttempt(event.getPlayer(), session);
@@ -345,6 +375,12 @@ public class TwoFactorModule implements SaryuGuardModule, Listener {
         session.resetFailedAttempts();
         removeRestrictions(player);
 
+        if (persistenceReady) {
+            SaryuGuardDatabase db = plugin.getDatabase();
+            UUID uuid = player.getUniqueId();
+            db.asyncVoid(c -> twoFactorDao.recordAuth(c, uuid, System.currentTimeMillis()));
+        }
+
         player.sendMessage(Component.text(
                 "[SaryuGuard] ✓ Verifikasi 2FA berhasil. Selamat datang, " + player.getName() + "!",
                 NamedTextColor.GREEN));
@@ -356,6 +392,7 @@ public class TwoFactorModule implements SaryuGuardModule, Listener {
 
     private void handleFailedAttempt(Player player, MfaSession session) {
         int attempts = session.incrementFailedAttempts();
+        UUID uuid = player.getUniqueId();
 
         // Apply progressive delay with jitter (±20%)
         int delayIdx = Math.min(attempts - 1, LOCKOUT_DELAYS_MS.length - 1);
@@ -368,6 +405,10 @@ public class TwoFactorModule implements SaryuGuardModule, Listener {
             // Lock the account
             lockPlayer(player, session);
         } else {
+            if (persistenceReady) {
+                SaryuGuardDatabase db = plugin.getDatabase();
+                db.asyncVoid(c -> twoFactorDao.updateLockState(c, uuid, false, attempts));
+            }
             int remaining = maxAttempts - attempts;
             player.sendMessage(Component.text(
                     "[SaryuGuard] Kode salah. Sisa percobaan: " + remaining
@@ -379,8 +420,16 @@ public class TwoFactorModule implements SaryuGuardModule, Listener {
 
     private void lockPlayer(Player player, MfaSession session) {
         session.setState(MfaState.LOCKED);
-        log.severe("[2FA] LOCKED: " + player.getName() + " (" + player.getUniqueId()
-                + ") dikunci setelah " + session.getFailedAttempts() + " percobaan gagal!");
+        int attempts = session.getFailedAttempts();
+        UUID uuid = player.getUniqueId();
+
+        if (persistenceReady) {
+            SaryuGuardDatabase db = plugin.getDatabase();
+            db.asyncVoid(c -> twoFactorDao.updateLockState(c, uuid, true, attempts));
+        }
+
+        log.severe("[2FA] LOCKED: " + player.getName() + " (" + uuid
+                + ") dikunci setelah " + attempts + " percobaan gagal!");
         Bukkit.getScheduler().runTask(plugin, () ->
                 player.kick(Component.text(
                         "[SaryuGuard] Akun Anda dikunci karena terlalu banyak percobaan 2FA gagal. " +
@@ -665,6 +714,38 @@ public class TwoFactorModule implements SaryuGuardModule, Listener {
                 log.log(Level.SEVERE, "[2FA] Gagal menyimpan secret terenkripsi: " + e.getMessage(), e);
             }
         });
+    }
+
+    private static List<String> parseJsonArray(String json) {
+        List<String> list = new ArrayList<>();
+        if (json == null || json.isBlank()) return list;
+        String s = json.trim();
+        if (s.startsWith("[") && s.endsWith("]")) {
+            s = s.substring(1, s.length() - 1).trim();
+            if (s.isEmpty()) return list;
+            String[] tokens = s.split(",");
+            for (String t : tokens) {
+                String item = t.trim();
+                if (item.startsWith("\"") && item.endsWith("\"")) {
+                    item = item.substring(1, item.length() - 1);
+                }
+                item = item.replace("\\\"", "\"").replace("\\\\", "\\");
+                if (!item.isEmpty()) {
+                    list.add(item);
+                }
+            }
+        }
+        return list;
+    }
+
+    private static String toJsonArray(List<String> list) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < list.size(); i++) {
+            if (i > 0) sb.append(',');
+            sb.append('"').append(escapeJson(list.get(i))).append('"');
+        }
+        sb.append(']');
+        return sb.toString();
     }
 
     private static String escapeJson(String s) {

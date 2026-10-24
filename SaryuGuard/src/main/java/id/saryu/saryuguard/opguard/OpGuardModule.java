@@ -157,13 +157,17 @@ public class OpGuardModule implements SaryuGuardModule, Listener {
     // Event handler: check on join
     // -------------------------------------------------------------------------
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.LOWEST)
     public void onPlayerLogin(PlayerLoginEvent event) {
         if (!running.get()) return;
-        UUID uuid = event.getPlayer().getUniqueId();
-        if (!event.getPlayer().isOp()) return;
+        Player player = event.getPlayer();
+        if (!player.isOp()) return;
+        UUID uuid = player.getUniqueId();
         if (!allowedOps.contains(uuid)) {
-            handleViolation(uuid, event.getPlayer().getName());
+            if ("enforce".equalsIgnoreCase(mode)) {
+                player.setOp(false);
+            }
+            handleViolation(uuid, player.getName());
         }
     }
 
@@ -188,8 +192,8 @@ public class OpGuardModule implements SaryuGuardModule, Listener {
     }
 
     private void handleViolation(UUID uuid, String name) {
-        if ("enforce".equalsIgnoreCase(mode)) {
-            Bukkit.getScheduler().runTask(plugin, () -> {
+        Runnable action = () -> {
+            if ("enforce".equalsIgnoreCase(mode)) {
                 org.bukkit.OfflinePlayer op = Bukkit.getOfflinePlayer(uuid);
                 if (op.isOp()) {
                     op.setOp(false);
@@ -200,30 +204,50 @@ public class OpGuardModule implements SaryuGuardModule, Listener {
                             "saryuguard.admin"
                     );
                 }
-            });
+            } else {
+                String msg = "[SaryuGuard] [OpGuard] WARN: " + name + " (" + uuid + ") OP tetapi tidak ada di daftar sah!";
+                log.warning(msg);
+                Bukkit.broadcast(
+                        net.kyori.adventure.text.Component.text(msg),
+                        "saryuguard.admin"
+                );
+            }
+        };
+
+        if (Bukkit.isPrimaryThread()) {
+            action.run();
         } else {
-            String msg = "[SaryuGuard] [OpGuard] WARN: " + name + " (" + uuid + ") OP tetapi tidak ada di daftar sah!";
-            log.warning(msg);
-            Bukkit.getScheduler().runTask(plugin, () ->
-                    Bukkit.broadcast(
-                            net.kyori.adventure.text.Component.text(msg),
-                            "saryuguard.admin"
-                    )
-            );
+            Bukkit.getScheduler().runTask(plugin, action);
         }
     }
 
     private void handleOfflineViolation(UUID uuid, String name) {
-        if ("enforce".equalsIgnoreCase(mode)) {
-            Bukkit.getScheduler().runTask(plugin, () -> {
+        Runnable action = () -> {
+            if ("enforce".equalsIgnoreCase(mode)) {
                 org.bukkit.OfflinePlayer op = Bukkit.getOfflinePlayer(uuid);
                 if (op.isOp()) {
                     op.setOp(false);
-                    log.severe("[OpGuard] ENFORCE(offline): " + name + " (" + uuid + ") dide-op.");
+                    String msg = "[SaryuGuard] [OpGuard] ENFORCE (offline): " + name + " (" + uuid + ") dide-op karena tidak ada di daftar OP sah!";
+                    log.severe(msg);
+                    Bukkit.broadcast(
+                            net.kyori.adventure.text.Component.text(msg),
+                            "saryuguard.admin"
+                    );
                 }
-            });
+            } else {
+                String msg = "[SaryuGuard] [OpGuard] WARN (offline): " + name + " (" + uuid + ") OP tetapi tidak ada di daftar sah!";
+                log.warning(msg);
+                Bukkit.broadcast(
+                        net.kyori.adventure.text.Component.text(msg),
+                        "saryuguard.admin"
+                );
+            }
+        };
+
+        if (Bukkit.isPrimaryThread()) {
+            action.run();
         } else {
-            log.warning("[OpGuard] WARN(offline): " + name + " (" + uuid + ") OP tapi tidak sah.");
+            Bukkit.getScheduler().runTask(plugin, action);
         }
     }
 

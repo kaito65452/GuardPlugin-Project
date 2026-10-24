@@ -202,19 +202,39 @@ public class MigrationManager {
         }
 
         File[] files = dataFolder.listFiles((dir, name) ->
-                name.endsWith(".yml") || name.endsWith(".db") || name.endsWith(".sqlite") || name.startsWith("languages"));
+                name.endsWith(".yml") || name.endsWith(".db") || name.endsWith(".sqlite")
+                        || name.endsWith(".sqlite3") || name.startsWith("languages"));
         if (files == null) return;
 
         for (File f : files) {
             try {
                 if (f.isFile()) {
                     Files.copy(f.toPath(), new File(backupDir, f.getName()).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                } else if (f.isDirectory() && f.getName().startsWith("languages")) {
+                    copyDirectoryRecursively(f.toPath(), new File(backupDir, f.getName()).toPath());
                 }
-            } catch (IOException e) {
-                logger.warning("Failed to backup file " + f.getName() + ": " + e.getMessage());
+            } catch (Exception e) {
+                logger.warning("Failed to backup " + f.getName() + ": " + e.getMessage());
             }
         }
         logger.info("[MIGRATION] File konfigurasi lama berhasil dicadangkan ke " + backupDir.getPath());
+    }
+
+    private static void copyDirectoryRecursively(java.nio.file.Path source, java.nio.file.Path target) throws IOException {
+        try (var stream = Files.walk(source)) {
+            stream.forEach(p -> {
+                try {
+                    java.nio.file.Path dest = target.resolve(source.relativize(p));
+                    if (Files.isDirectory(p)) {
+                        if (!Files.exists(dest)) Files.createDirectories(dest);
+                    } else {
+                        Files.copy(p, dest, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        }
     }
 
     private boolean tableExists(Connection conn, String tableName) {

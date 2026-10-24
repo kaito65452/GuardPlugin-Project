@@ -147,6 +147,15 @@ public class AuditDao {
         return out;
     }
 
+    public @Nullable String latestChainHashBefore(@NotNull Connection c, long cutoffEpochMs) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT chain_hash FROM sg_audit_log WHERE created_at < ? ORDER BY id DESC LIMIT 1")) {
+            ps.setLong(1, cutoffEpochMs);
+            ResultSet rs = ps.executeQuery();
+            return rs.next() ? rs.getString(1) : null;
+        }
+    }
+
     public int deleteOlderThan(@NotNull Connection c, long cutoffEpochMs) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
                 "DELETE FROM sg_audit_log WHERE created_at < ?")) {

@@ -38,14 +38,14 @@ public final class AuditChain {
             @Nullable String ipPlain
     ) {
         StringBuilder sb = new StringBuilder(128);
-        sb.append(nullToEmpty(eventType)).append('|')
+        sb.append(escapeField(eventType)).append('|')
                 .append(createdAt).append('|')
-                .append(nullToEmpty(actorUuid)).append('|')
-                .append(nullToEmpty(actorName)).append('|')
-                .append(nullToEmpty(targetUuid)).append('|')
-                .append(nullToEmpty(targetName)).append('|')
-                .append(nullToEmpty(detailsPlain)).append('|')
-                .append(nullToEmpty(ipPlain));
+                .append(escapeField(actorUuid)).append('|')
+                .append(escapeField(actorName)).append('|')
+                .append(escapeField(targetUuid)).append('|')
+                .append(escapeField(targetName)).append('|')
+                .append(escapeField(detailsPlain)).append('|')
+                .append(escapeField(ipPlain));
         return sb.toString().getBytes(StandardCharsets.UTF_8);
     }
 
@@ -85,6 +85,11 @@ public final class AuditChain {
             if ((c < '0' || c > '9') && (c < 'a' || c > 'f')) return false;
         }
         return true;
+    }
+
+    private static String escapeField(@Nullable String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("|", "\\|");
     }
 
     private static String nullToEmpty(@Nullable String s) {

@@ -7,6 +7,13 @@ core:
   reload-success: "<green>SaryuGuard configuration and modules reloaded successfully."
   reload-failed: "<red>Failed to reload configuration: <gray>{error}"
   unknown-subcommand: "<red>Unknown subcommand. Type <yellow>/sg help<red> for help."
+  usage: "<yellow>Usage: <white>{usage}"
+  cooldown: "<red>Please wait a moment before executing this command again."
+  error: "<red>An internal error occurred: <gray>{error}"
+
+chat:
+  filtered-notice: "<red>Your message was hidden from other players for violating chat rules (<white>{reason}</white>)."
+  error-blocked: "<red>Your message was temporarily blocked due to a chat filter system error."
 
 status:
   header: "<gold>=== SaryuGuard System Status ===<reset>"

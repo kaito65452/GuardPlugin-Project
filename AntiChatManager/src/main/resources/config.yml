@@ -3,8 +3,8 @@ config-version: 4
 
 blacklist:
   bypass:
-    # Whether OP players automatically bypass the blacklist
-    allow-op: true
+    # Whether OP players automatically bypass the blacklist (defaults to false for security)
+    allow-op: false
 
 # Emergency Blacklist (statis, tidak butuh database jika startup gagal atau cache kosong)
 emergency-blacklist:

@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 
@@ -56,7 +57,7 @@ public class ChatFilterModule implements SaryuGuardModule, Listener {
 
     private final Set<String> badWords = ConcurrentHashMap.newKeySet();
     private final Set<String> whitelistWords = ConcurrentHashMap.newKeySet();
-    private final List<String> rawAdminRegex = new ArrayList<>();
+    private final List<String> rawAdminRegex = new CopyOnWriteArrayList<>();
 
     private final AtomicReference<AhoCorasick> ahoCorasickRef = new AtomicReference<>();
     private final AtomicReference<CensorTrie> censorTrieRef = new AtomicReference<>();
@@ -318,7 +319,7 @@ public class ChatFilterModule implements SaryuGuardModule, Listener {
                 FileConfiguration cfg = new YamlConfiguration();
                 cfg.set("words", new ArrayList<>(badWords));
                 cfg.set("whitelist", new ArrayList<>(whitelistWords));
-                cfg.set("regex", rawAdminRegex);
+                cfg.set("regex", new ArrayList<>(rawAdminRegex));
                 cfg.save(wordsFile);
             } catch (IOException e) {
                 plugin.getLogger().log(Level.WARNING, "Failed to save words.yml: " + e.getMessage(), e);

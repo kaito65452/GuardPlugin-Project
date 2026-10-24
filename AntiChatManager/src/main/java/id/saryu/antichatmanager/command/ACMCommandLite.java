@@ -124,9 +124,10 @@ public class ACMCommandLite {
             };
 
             sender.sendMessage(plugin.formatMessage("version-info",
-                    "<gold>AntiChatManager Lite <yellow>v{version} <gray>(Commit: {commit}) - Policy Status: " + statusColor,
+                    "<gold>AntiChatManager Lite <yellow>v{version} <gray>(Commit: {commit}) - Policy Status: {status}",
                     "version", ver,
-                    "commit", commit));
+                    "commit", commit,
+                    "status", statusColor));
         }
     }
 

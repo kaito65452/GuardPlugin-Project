@@ -4,7 +4,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
-import java.util.Arrays;
+import java.security.MessageDigest;
 
 /**
  * TOTP (RFC 6238) implementation using JDK-built-in HmacSHA1.
@@ -40,6 +40,28 @@ public final class TotpEngine {
     }
 
     /**
+     * Verify a TOTP code against the current time, with a ±1 step window and replay protection.
+     *
+     * @param secret          raw TOTP secret bytes
+     * @param code            code entered by the user (digits only)
+     * @param lastUsedCounter last counter successfully used (or -1 if none)
+     * @return counter of the matched window if valid and newer than lastUsedCounter; -1 if invalid or replay
+     */
+    public static long verifyAndGetCounter(byte[] secret, String code, long lastUsedCounter) throws GeneralSecurityException {
+        if (code == null || !code.matches("\\d{6}")) return -1;
+        long counter = currentCounter();
+        for (int i = -WINDOW; i <= WINDOW; i++) {
+            long checkCounter = counter + i;
+            if (checkCounter <= lastUsedCounter) continue; // replay prevention
+            String generated = generate(secret, checkCounter);
+            if (constantTimeEquals(generated, code)) {
+                return checkCounter;
+            }
+        }
+        return -1;
+    }
+
+    /**
      * Verify a TOTP code against the current time, with a ±1 step window.
      *
      * @param secret raw TOTP secret bytes
@@ -47,18 +69,7 @@ public final class TotpEngine {
      * @return true if code is valid within the window
      */
     public static boolean verify(byte[] secret, String code) throws GeneralSecurityException {
-        if (code == null || !code.matches("\\d{6}")) return false;
-        int provided = Integer.parseInt(code);
-        long counter = currentCounter();
-        for (int i = -WINDOW; i <= WINDOW; i++) {
-            String generated = generate(secret, counter + i);
-            if (constantTimeEquals(generated, code) ||
-                    Integer.parseInt(generated) == provided) {
-                // Use constant-time comparison to prevent timing attacks
-                if (constantTimeEquals(generated, code)) return true;
-            }
-        }
-        return false;
+        return verifyAndGetCounter(secret, code, -1) != -1;
     }
 
     // -------------------------------------------------------------------------
@@ -92,7 +103,7 @@ public final class TotpEngine {
         if (a == null || b == null) return false;
         byte[] ba = a.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         byte[] bb = b.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        return Arrays.equals(ba, bb);
+        return MessageDigest.isEqual(ba, bb);
     }
 
     /**
