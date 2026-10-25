@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 /**
@@ -217,7 +218,15 @@ public class OpGuardSubcommand implements CommandFramework.SubCommand {
                 .append(Component.text("' di sumber lokal...", NamedTextColor.GRAY)));
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            NameResolver.ResolveResult result = resolver.resolve(input);
+            NameResolver.ResolveResult result;
+            try {
+                result = resolver.resolve(input);
+            } catch (Throwable t) {
+                plugin.getLogger().log(Level.WARNING, "[OpGuard] Gagal menyelesaikan nama '" + input + "': " + t.getMessage(), t);
+                Bukkit.getScheduler().runTask(plugin, () ->
+                        sender.sendMessage(Component.text("[OpGuard] Gagal mencari nama '" + input + "': " + t.getMessage(), NamedTextColor.RED)));
+                return;
+            }
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 switch (result.status()) {

@@ -138,6 +138,22 @@ class OpGuardTest {
         }
 
         @Test
+        @DisplayName("Source throwing NoClassDefFoundError (e.g. Achievement) does not crash resolve and returns ERROR")
+        void sourceThrowingNoClassDefFoundErrorHandledGracefully(@TempDir Path tempDir) {
+            NameResolver resolver = new NameResolver(null, tempDir);
+
+            resolver.registerSource("EssentialsX", name -> {
+                throw new NoClassDefFoundError("org/bukkit/Achievement");
+            });
+            resolver.registerSource("LuckPerms", name -> UUID.randomUUID());
+
+            NameResolver.ResolveResult result = resolver.resolve("Saryu_sinaga");
+            assertEquals(NameResolver.ResolveResult.Status.ERROR, result.status());
+            assertTrue(result.message().contains("EssentialsX"));
+            assertTrue(result.message().contains("Achievement"));
+        }
+
+        @Test
         @DisplayName("Validation: Valid player name passes, invalid names rejected")
         void nameValidation(@TempDir Path tempDir) {
             NameResolver resolver = new NameResolver(null, tempDir);

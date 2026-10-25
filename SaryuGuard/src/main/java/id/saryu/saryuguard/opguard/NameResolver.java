@@ -9,6 +9,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -207,8 +208,8 @@ public class NameResolver {
                 try {
                     UUID u = entry.getValue().lookup(name);
                     if (u != null) results.put(entry.getKey(), u);
-                } catch (Exception e) {
-                    errors.put(entry.getKey(), e.getMessage());
+                } catch (Throwable t) {
+                    errors.put(entry.getKey(), t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName());
                 }
             }
         } else {
@@ -219,9 +220,9 @@ public class NameResolver {
                 try {
                     UUID lp = lookupLuckPerms(name);
                     if (lp != null) results.put("LuckPerms", lp);
-                } catch (Exception e) {
-                    errors.put("LuckPerms", e.getMessage());
-                    if (log != null) log.log(Level.FINE, "[OpGuard] LuckPerms lookup error for " + name, e);
+                } catch (Throwable t) {
+                    errors.put("LuckPerms", t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName());
+                    if (log != null) log.log(Level.FINE, "[OpGuard] LuckPerms lookup error for " + name, t);
                 }
             }
 
@@ -230,9 +231,9 @@ public class NameResolver {
                 try {
                     UUID ess = lookupEssentials(name);
                     if (ess != null) results.put("EssentialsX", ess);
-                } catch (Exception e) {
-                    errors.put("EssentialsX", e.getMessage());
-                    if (log != null) log.log(Level.FINE, "[OpGuard] EssentialsX lookup error for " + name, e);
+                } catch (Throwable t) {
+                    errors.put("EssentialsX", t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName());
+                    if (log != null) log.log(Level.FINE, "[OpGuard] EssentialsX lookup error for " + name, t);
                 }
             }
 
@@ -241,9 +242,9 @@ public class NameResolver {
                 try {
                     UUID ops = lookupOpsJson(name);
                     if (ops != null) results.put("ops.json", ops);
-                } catch (Exception e) {
-                    errors.put("ops.json", e.getMessage());
-                    if (log != null) log.log(Level.FINE, "[OpGuard] ops.json lookup error for " + name, e);
+                } catch (Throwable t) {
+                    errors.put("ops.json", t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName());
+                    if (log != null) log.log(Level.FINE, "[OpGuard] ops.json lookup error for " + name, t);
                 }
             }
 
@@ -252,9 +253,9 @@ public class NameResolver {
                 try {
                     UUID cached = lookupBukkitCache(name);
                     if (cached != null) results.put("Bukkit-cache", cached);
-                } catch (Exception e) {
-                    errors.put("Bukkit-cache", e.getMessage());
-                    if (log != null) log.log(Level.FINE, "[OpGuard] Bukkit-cache lookup error for " + name, e);
+                } catch (Throwable t) {
+                    errors.put("Bukkit-cache", t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName());
+                    if (log != null) log.log(Level.FINE, "[OpGuard] Bukkit-cache lookup error for " + name, t);
                 }
             }
         }
@@ -306,14 +307,15 @@ public class NameResolver {
                             .invoke(userManager, name);
 
             return future.get(5, java.util.concurrent.TimeUnit.SECONDS);
-        } catch (ClassNotFoundException e) {
+        } catch (ClassNotFoundException | NoClassDefFoundError e) {
             return null;
         } catch (java.util.concurrent.TimeoutException e) {
             if (log != null) log.warning("[OpGuard] LuckPerms lookup timeout for: " + name);
             return null;
-        } catch (Exception e) {
-            if (e.getCause() instanceof ClassNotFoundException) return null;
-            throw new RuntimeException("LuckPerms lookup error: " + e.getMessage(), e);
+        } catch (Throwable e) {
+            if (e.getCause() instanceof ClassNotFoundException || e.getCause() instanceof NoClassDefFoundError) return null;
+            if (log != null) log.log(Level.FINE, "[OpGuard] LuckPerms lookup error for " + name, e);
+            return null;
         }
     }
 
@@ -330,22 +332,34 @@ public class NameResolver {
                 Object user = essPlugin.getClass().getMethod("getUser", String.class)
                         .invoke(essPlugin, name);
                 if (user != null) {
+                    // 1. Try getUUID() first (declared on Essentials IUser interface, returns java.util.UUID)
+                    try {
+                        Method m = user.getClass().getMethod("getUUID");
+                        Object res = m.invoke(user);
+                        if (res instanceof UUID uuid) return uuid;
+                    } catch (Throwable ignored) {}
+
+                    // 2. Try getConfigUUID()
+                    try {
+                        Method m = user.getClass().getMethod("getConfigUUID");
+                        Object res = m.invoke(user);
+                        if (res instanceof UUID uuid) return uuid;
+                    } catch (Throwable ignored) {}
+
+                    // 3. Try getBase() if online, using Bukkit Entity interface call to avoid reflection on CraftPlayer
                     try {
                         Object base = user.getClass().getMethod("getBase").invoke(user);
-                        if (base != null) {
-                            return (UUID) base.getClass().getMethod("getUniqueId").invoke(base);
+                        if (base instanceof org.bukkit.entity.Entity entity) {
+                            return entity.getUniqueId();
                         }
-                    } catch (Exception ignored) {}
-
-                    try {
-                        return (UUID) user.getClass().getMethod("getConfigUUID").invoke(user);
-                    } catch (Exception ignored) {}
+                    } catch (Throwable ignored) {}
                 }
-            } catch (NoSuchMethodException ignored) {}
+            } catch (Throwable ignored) {}
 
             return lookupEssentialsFiles(name, essPlugin);
-        } catch (Exception e) {
-            throw new RuntimeException("EssentialsX lookup error: " + e.getMessage(), e);
+        } catch (Throwable e) {
+            if (log != null) log.log(Level.FINE, "[OpGuard] EssentialsX lookup error for " + name, e);
+            return null;
         }
     }
 
