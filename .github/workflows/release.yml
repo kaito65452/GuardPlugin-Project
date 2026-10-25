@@ -20,14 +20,15 @@ jobs:
           java-version: "25"
       - uses: gradle/actions/setup-gradle@48b5f213c81028ace310571dc5ec0fbbca0b2947 # v4
       - name: Build release jars
-        run: ./gradlew build --no-daemon
+        run: ./gradlew build -Prelease --no-daemon
       - name: Prepare release artifacts and SHA256SUMS
         run: |
           mkdir -p dist
+          rm -f dist/*
           cp AntiChatManager/build/libs/AntiChatManager-*.jar dist/
           cp SaryuLibCore/build/libs/SaryuLibCore-*.jar dist/
           cp SaryuGuard/build/libs/SaryuGuard-*.jar dist/
-          rm -f dist/*-sources.jar
+          rm -f dist/*-sources.jar dist/*-slim.jar
           cd dist
           sha256sum *.jar > SHA256SUMS
           cat SHA256SUMS
