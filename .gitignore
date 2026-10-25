@@ -9,4 +9,5 @@ run/
 testing-server/
 testing-bot/node_modules/
 *.log
+dist/
 local.properties
